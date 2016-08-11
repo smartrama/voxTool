@@ -1,0 +1,82 @@
+-- View
+* Pointcloud
+ - Thresholded CT
+ - Color gradient
+ - Selected Electrode
+ - Labeled Electrodes
+ - Proposed Electrodes
+ - Missing Proposed Electrodes
+* Cursor
+* Slice
+ - Selected Electrode
+ - Labeled Electrodes
+ - Selected location crosshair
+* Electrode Input
+ - Label
+ - Type
+ - Grid Coordinates
+ - Physical coordinates
+* Grid Selection
+ - Corner chooser
+ - Control point chooser
+ - Grid dimension input
+* Electrode List
+ - Labels, numbers, coordinates, type, grid coordinates
+* Settings
+ - Electrode type radii
+
+-- Model
+* CT Scan
+ - slices
+ - pointcloud
+ - threshold
+ - transform
+* Electrode
+ - label
+ - number
+ - grid coordinates
+ - coordinates
+ - radius
+ - associated points
+ - physical existence
+ - selection status
+ - color
+* Grid
+ - physical dimensions
+ - grid dimensions
+ - control points
+ - associated Electrodes
+ - Keyboard interaction?
+* Localization
+ - Selected Grids
+ - CT Scan
+ - Subject/Montage information
+ - (Other meta-information?)
+ - (coregistration?)
+
+
+-- Interactions
+* Form
+ - Change selected electrode:
+    label, type, grid coordinates, number
+ - Delete selected electrode(s)
+ - Load img
+ - Load voxel_coordinates
+ - Re-threshold
+* Mouse:
+ - Select electrode
+ - Re-select electrode
+ - Modify selected electrode
+ - Select grid corner
+ - Select grid control points
+ - Display electrode info on mouseover
+* Keyboard
+ - Shift electrode position
+
+
+-- FUTURE DIRECTIONS:
+display overlayed skull
+load MRI coregistration
+display MRI slices
+display MRI segmentation
+input electrode location tag
