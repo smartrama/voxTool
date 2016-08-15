@@ -157,9 +157,7 @@ class PointCloudView(object):
         color = self.choose_color()
         if len(x) > 0:
             self._plot = mlab.points3d(x, y, z,
-                                       color, mode='point', resolution=4, colormap=self.colormap)
-            self._glyph_points = \
-                 self._plot.glyph.glyph_source.glyph_source.output.points.to_array()
+                                       color, mode='sphere', resolution=3, colormap=self.colormap, scale_mode='none', scale_factor=2)
 
 
     def update(self):
@@ -168,10 +166,7 @@ class PointCloudView(object):
         else:
             x, y, z = self.point_cloud.xyz
             self._plot.mlab_source.reset(x=x, y=y, z=z, scalars=self.choose_color())
-            self._glyph_points = \
-                 self._plot.glyph.glyph_source.glyph_source.output.points.to_array()
 
     def picker_callback(self, picker):
         if self._plot and picker.actor in self._plot.actor.actors:
-            #point_id = picker.point_id # / self._glyph_points.shape[0]
             self._custom_picker_callback(np.array(picker.pick_position))
