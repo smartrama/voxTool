@@ -157,7 +157,7 @@ class PointCloudView(object):
         color = self.choose_color()
         if len(x) > 0:
             self._plot = mlab.points3d(x, y, z,
-                                       color, mode='sphere', resolution=3, colormap=self.colormap, scale_mode='none', scale_factor=2)
+                                       color, mode='cube', resolution=3, colormap=self.colormap, scale_mode='none', scale_factor=1)
 
 
     def update(self):
