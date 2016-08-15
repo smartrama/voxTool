@@ -1,5 +1,6 @@
 import nibabel as nib
 import numpy as np
+import scipy.spatial.distance
 
 __author__ = 'iped'
 
@@ -55,6 +56,15 @@ class PointCloud(object):
         dists = np.sqrt(np.sum(np.square(vector_dist), 1))
         return self.coordinates[dists < range]
 
+    def remove_isolated_points(self):
+        print 'Getting distances...'
+        dists = scipy.spatial.distance.pdist(self.coordinates, 'cityblock')
+        print 'Thresholding'
+        mask = scipy.spatial.distance.squareform((dists <= 1)).any(0)
+        print 'Removing {} points'.format(np.count_nonzero(mask == 0))
+        self.coordinates = self.coordinates[mask, :]
+
+
     @property
     def xyz(self):
         if len(self.coordinates.shape) > 1 and self.coordinates.shape[1] > 0:
@@ -67,7 +77,7 @@ class PointCloud(object):
 
 class CT(object):
 
-    THRESHOLD = 99.9
+    THRESHOLD = 99.96
 
     def __init__(self, img_file):
         self.img_file = img_file
@@ -75,23 +85,40 @@ class CT(object):
         data = img.get_data()
         mask = data >= np.percentile(data, self.THRESHOLD)
         indices = np.array(mask.nonzero()).T
-        self.unselected_points = \
+        self.all_points = \
             PointCloud('_ct', indices)
-        self.selected_points = \
-            PointCloud('_selected', np.array([[], [], []]).T)
-        self.proposed_points = []
-        self.missing_points = []
-        self.confirmed_points = []
+        self.selected_points = self.empty_cloud('_selected')
+        self.proposed_electrodes = []
+        self.missing_electrodes = []
+        self.confirmed_electrodes = []
+
+    def remove_isolated_points(self):
+        self.all_points.remove_isolated_points()
 
     @property
     def point_clouds(self):
-        return [self.unselected_points, self.selected_points] + \
-            self.proposed_points + self.missing_points + self.confirmed_points
+        return self.all_points, self.selected_points
+
+    @property
+    def point_cloud_groups(self):
+        return self.proposed_electrodes, self.missing_electrodes, self.confirmed_electrodes
+
+
+    @classmethod
+    def empty_cloud(cls, label):
+        return PointCloud(label, np.array([[], [], []]).T)
 
     def select_points(self, points):
         self.selected_points.clear()
-        self.unselected_points.move_points_to(points, self.selected_points)
+        self.selected_points.add_coordinates(points)
+        #self.all_points.move_points_to(points, self.selected_points)
 
     def select_points_near(self, point):
-        self.unselected_points = self.unselected_points.union(self.selected_points)
-        self.select_points(self.unselected_points.get_points_in_range(point))
+        #self.all_points = self.all_points.union(self.selected_points)
+        self.select_points(self.all_points.get_points_in_range(point))
+
+    def confirm_selected_electrode(self, name):
+        new_cloud = self.empty_cloud(name)
+        new_cloud.union(self.selected_points)
+        self.confirmed_electrodes.append(new_cloud)
+        self.selected_points.clear()

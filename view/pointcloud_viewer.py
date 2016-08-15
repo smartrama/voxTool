@@ -25,15 +25,24 @@ class PointCloudWidget(QtGui.QWidget):
         self.ui.setParent(self)
         self.ct = None
 
+
+    def update(self):
+        self.viewer.set_groups(*self.ct.point_cloud_groups)
+        self.viewer.update()
+
+    def reload_ct(self, ct):
+        self.viewer.clear_views()
+        self.load_ct(ct)
+
     def load_ct(self, ct):
-        self.ct_view = PointCloudView(ct.unselected_points, self.ct_callback)
+        self.ct_view = PointCloudView(ct.all_points, self.ct_callback, True)
         self.selected_view = PointCloudView(ct.selected_points, self.selected_callback)
         self.viewer.add_views(self.ct_view, self.selected_view)
         self.viewer.plot()
         self.ct = ct
 
     def ct_callback(self, coordinate):
-        #selected_point = self.ct.unselected_points[index]
+        #selected_point = self.ct.all_points[index]
         self.ct.select_points_near(coordinate)
         self.viewer.update()
 
@@ -50,6 +59,8 @@ class PointCloudWidget(QtGui.QWidget):
         pass
 
 class PointCloudViewer(HasTraits):
+    BACKGROUND_COLOR = (.1, .1, .1)
+
     scene = Instance(MlabSceneModel, ())
 
     def __init__(self, figure=None):
@@ -57,12 +68,29 @@ class PointCloudViewer(HasTraits):
         self.point_cloud_views = []
         self.point_cloud_groups = []
         self.figure = self.scene.mlab.gcf()
+        mlab.figure(self.figure, bgcolor=self.BACKGROUND_COLOR)
         self.picker = None
         self.plotted = False
+
+    @property
+    def views_and_groups(self):
+        views = self.point_cloud_views[:]
+        for group in self.point_cloud_groups:
+            views.extend(group)
+        return views
+
+    def clear_views(self):
+        self.point_cloud_views = []
+        self.figure.clf()
 
     def add_views(self, *point_clouds):
         self.point_cloud_views.extend(point_clouds)
         self.refresh_picker_callback()
+
+    def set_groups(self, *groups):
+        self.point_cloud_groups = []
+        for group in groups:
+            self.point_cloud_groups.append([PointCloudView(pc) for pc in group])
 
     def add_groups(self, *groups):
         self.point_cloud_groups.extend(groups)
@@ -75,11 +103,8 @@ class PointCloudViewer(HasTraits):
 
 
     def plot(self):
-        for point_cloud_view in self.point_cloud_views:
+        for point_cloud_view in self.views_and_groups:
             point_cloud_view.plot()
-        for point_cloud_group in self.point_cloud_groups:
-            for point_cloud_view in point_cloud_group:
-                point_cloud_view.plot()
         self.plotted = True
 
 
@@ -89,7 +114,7 @@ class PointCloudViewer(HasTraits):
             self.plot()
         else:
             self.refresh_picker_callback()
-            for point_cloud_view in self.point_cloud_views:
+            for point_cloud_view in self.views_and_groups:
                 point_cloud_view.update()
 
     view = View(Item('scene', editor=SceneEditor(scene_class=MayaviScene),
@@ -131,7 +156,7 @@ class PointCloudView(object):
         if len(self.point_cloud.coordinates) > 0:
             y = self.point_cloud.coordinates[:,1]
             if self.point_cloud.label == '_ct':
-                return ((np.array(y) - float(min(y))) / float(max(y)))
+                return ((np.array(y) - float(min(y))) / float(max(y))) * .6 + .4
             elif self.point_cloud.label == '_proposed_electrode':
                 return np.ones(y.shape) * .7
             elif self.point_cloud.label == '_missing_electrode':
@@ -144,20 +169,23 @@ class PointCloudView(object):
         else:
             return 0
 
-    def __init__(self, point_cloud, picker_callback=lambda *_:None):
+    def __init__(self, point_cloud, picker_callback=lambda *_:None, never_update=False):
         self.point_cloud = point_cloud
         self._custom_picker_callback = picker_callback
         self.color = self.choose_color()
         self.colormap = self.choose_colormap()
         self._plot = None
         self._glyph_points = None
+        self.never_update = never_update
 
     def plot(self):
         x, y, z = self.point_cloud.xyz
         color = self.choose_color()
         if len(x) > 0:
             self._plot = mlab.points3d(x, y, z,
-                                       color, mode='cube', resolution=3, colormap=self.colormap, scale_mode='none', scale_factor=1)
+                                       color, mode='cube', resolution=3,
+                                       colormap=self.colormap, vmax=1, vmin=0,
+                                       scale_mode='none', scale_factor=1)
 
 
     def update(self):
