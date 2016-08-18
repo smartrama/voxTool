@@ -12,7 +12,7 @@ __author__ = 'iped'
 
 class PointCloudWidget(QtGui.QWidget):
 
-    def __init__(self, parent=None):
+    def __init__(self, controller, parent=None ):
         QtGui.QWidget.__init__(self, parent)
         layout = QtGui.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -22,8 +22,9 @@ class PointCloudWidget(QtGui.QWidget):
         self.ui = self.viewer.edit_traits(parent=self,
                                           kind='subpanel').control
         layout.addWidget(self.ui)
-        self.ui.setParent(self)
+        #self.ui.setParent(self)
         self.ct = None
+        self.controller = controller
 
 
     def update(self):
@@ -35,16 +36,16 @@ class PointCloudWidget(QtGui.QWidget):
         self.load_ct(ct)
 
     def load_ct(self, ct):
-        self.ct_view = PointCloudView(ct.all_points, self.ct_callback, True)
-        self.selected_view = PointCloudView(ct.selected_points, self.selected_callback)
+        self.ct_view = PointCloudView(ct.all_points, self.ct_callback, -1, True)
+        self.selected_view = PointCloudView(ct.selected_points, self.selected_callback, 10)
         self.viewer.add_views(self.ct_view, self.selected_view)
         self.viewer.plot()
         self.ct = ct
 
     def ct_callback(self, coordinate):
-        #selected_point = self.ct.all_points[index]
-        self.ct.select_points_near(coordinate)
+        centered_coordinate = self.ct.select_centered_points_near(coordinate)
         self.viewer.update()
+        self.controller.notify_slice_viewers(centered_coordinate)
 
     def proposed_callback(self, picker):
         pass
@@ -101,15 +102,17 @@ class PointCloudViewer(HasTraits):
         else:
             self.picker.point_cloud_views = self.point_cloud_views
 
-
     def plot(self):
-        for point_cloud_view in self.views_and_groups:
+        all_views = sorted(self.views_and_groups, key=lambda v: v.priority)
+
+        for point_cloud_view in all_views:
             point_cloud_view.plot()
         self.plotted = True
 
 
     @on_trait_change('scene.activated')
     def update(self):
+        mlab.figure(self.figure, bgcolor=self.BACKGROUND_COLOR)
         if not self.plotted:
             self.plot()
         else:
@@ -151,25 +154,21 @@ class PointCloudView(object):
         else:
             return 'spectral'
 
-
     def choose_color(self):
-        if len(self.point_cloud.coordinates) > 0:
-            y = self.point_cloud.coordinates[:,1]
-            if self.point_cloud.label == '_ct':
-                return ((np.array(y) - float(min(y))) / float(max(y))) * .6 + .4
-            elif self.point_cloud.label == '_proposed_electrode':
-                return np.ones(y.shape) * .7
-            elif self.point_cloud.label == '_missing_electrode':
-                return np.ones(y.shape) * .4
-            elif self.point_cloud.label == '_selected':
-                return np.ones(y.shape) * .2
-            else:
-                seeded_random = random.Random(self.point_cloud.label)
-                return seeded_random.random(), seeded_random.random(), seeded_random.random()
+        _, y, _ = self.point_cloud.xyz
+        if self.point_cloud.label == '_ct':
+            return ((np.array(y) - float(min(y))) / float(max(y))) * .6 + .4
+        elif self.point_cloud.label == '_proposed_electrode':
+            return np.ones(y.shape) * .7
+        elif self.point_cloud.label == '_missing_electrode':
+            return np.ones(y.shape) * .4
+        elif self.point_cloud.label == '_selected':
+            return np.ones(y.shape) * .2
         else:
-            return 0
+            seeded_random = random.Random(self.point_cloud.label)
+            return np.ones(y.shape) * seeded_random.random()
 
-    def __init__(self, point_cloud, picker_callback=lambda *_:None, never_update=False):
+    def __init__(self, point_cloud, picker_callback=lambda *_:None, priority=0, never_update=False):
         self.point_cloud = point_cloud
         self._custom_picker_callback = picker_callback
         self.color = self.choose_color()
@@ -177,6 +176,7 @@ class PointCloudView(object):
         self._plot = None
         self._glyph_points = None
         self.never_update = never_update
+        self.priority = priority
 
     def plot(self):
         x, y, z = self.point_cloud.xyz
@@ -191,10 +191,10 @@ class PointCloudView(object):
     def update(self):
         if not self._plot:
             self.plot()
-        else:
+        elif not self.never_update:
             x, y, z = self.point_cloud.xyz
             self._plot.mlab_source.reset(x=x, y=y, z=z, scalars=self.choose_color())
 
     def picker_callback(self, picker):
         if self._plot and picker.actor in self._plot.actor.actors:
-            self._custom_picker_callback(np.array(picker.pick_position))
+            return self._custom_picker_callback(np.array(picker.pick_position))

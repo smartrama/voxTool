@@ -9,6 +9,8 @@ from mayavi.core.ui.api import MayaviScene, MlabSceneModel, \
 
 from pointcloud_viewer import PointCloudViewer
 
+from slice_viewer import SliceViewWidget
+
 __author__ = 'iped'
 
 
@@ -17,18 +19,23 @@ class PyLoc(QtGui.QWidget):
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent)
         self.submission = ElectrodeSubmissionLayout(self)
-        self.cloud_widget = PointCloudWidget()
+        self.cloud_widget = PointCloudWidget(self)
         self.task_bar = TaskBarLayout()
+        self.slice_viewers = [SliceViewWidget(self)]
 
         layout = QtGui.QVBoxLayout(self)
         splitter = QtGui.QSplitter()
         splitter.addWidget(self.submission)
         splitter.addWidget(self.cloud_widget)
+        splitter.addWidget(self.slice_viewers[0])
+        splitter.setSizes([100, 400, 200])
 
         layout.addWidget(splitter)
         layout.addLayout(self.task_bar)
 
         self.add_callbacks()
+
+        self.ct = None
 
 
 
@@ -57,6 +64,7 @@ class PyLoc(QtGui.QWidget):
         if file:
             self.ct = CT(file)
             self.cloud_widget.load_ct(self.ct)
+            self.slice_viewers[0].set_ct(self.ct)
 
     def select_electrode(self):
         electrode_name = self.submission.input_box.text()
@@ -66,6 +74,11 @@ class PyLoc(QtGui.QWidget):
     def clean_scan(self):
         self.ct.remove_isolated_points()
         self.cloud_widget.update()
+
+    def notify_slice_viewers(self, coordinate):
+        for viewer in self.slice_viewers:
+            viewer.set_coordinate(coordinate)
+            viewer.update()
 
 
 class ElectrodeSubmissionLayout(QtGui.QFrame):
