@@ -13,11 +13,46 @@ from slice_viewer import SliceViewWidget
 
 __author__ = 'iped'
 
+class PyLocControl(object):
 
-class PyLoc(QtGui.QWidget):
+    def __init__(self):
+        self.app = QtGui.QApplication.instance()
+        self.view = PyLocView(self)
+        self.view.show()
 
-    def __init__(self, parent=None):
+        window = QtGui.QMainWindow()
+        window.setCentralWidget(self.view)
+        window.show()
+
+        self.ct = None
+
+    def exec_(self):
+        self.app.exec_()
+
+    def choose_ct_scan(self):
+        file = QtGui.QFileDialog.getOpenFileName(None, 'Select Scan', '.', '(*.img; *.nii.gz)')
+        if file:
+            self.load_ct_scan(file)
+
+    def load_ct_scan(self, filename):
+        self.ct = CT(filename)
+        # TODO: cloud widget, slice viewers
+
+    def clean_ct_scan(self):
+        self.ct.remove_isolated_points()
+        # TODO: Update cloud widget
+
+    def update_cloud(self):
+        self.view.update_cloud(self.ct.get_coordinates())
+        self.view.update_slices(self.ct.get_slices())
+        # TODO: CT.get_coordinates/slices, view.update_cloud/slices
+
+
+class PyLocView(QtGui.QWidget):
+
+    def __init__(self, controller, parent=None):
         QtGui.QWidget.__init__(self, parent)
+        self.controller = controller
         self.submission = ElectrodeSubmissionLayout(self)
         self.cloud_widget = PointCloudWidget(self)
         self.task_bar = TaskBarLayout()
@@ -37,42 +72,21 @@ class PyLoc(QtGui.QWidget):
 
         self.ct = None
 
-
-
-    @staticmethod
-    def launch():
-        app = QtGui.QApplication.instance()
-        pyloc = PyLoc()
-        pyloc.show()
-        #pyloc.cloud_widget.load_ct(CT('/Users/iped/PycharmProjects/voxTool/sandbox/R1002P_CT_combined.img'))
-        #CT.THRESHOLD=99.99
-        #thresholded = CT('/Users/iped/PycharmProjects/voxTool/sandbox/R1002P_CT_combined.img')
-        #thresholded.all_points.type = thresholded.all_points.TYPES.SELECTED
-        #pyloc.cloud_widget.load_ct(thresholded)
-        window = QtGui.QMainWindow()
-        window.setCentralWidget(pyloc)
-        window.show()
-        app.exec_()
-
     def add_callbacks(self):
         self.task_bar.load_scan_button.clicked.connect(self.load_scan)
-        self.submission.submit_button.clicked.connect(self.select_electrode)
+        self.submission.submit_button.clicked.connect(self.add_electrode)
         self.task_bar.clean_button.clicked.connect(self.clean_scan)
 
-    def load_scan(self):
-        file = QtGui.QFileDialog.getOpenFileName(self, 'Select Scan', '.', '(*.img; *.nii.gz)')
-        if file:
-            self.ct = CT(file)
-            self.cloud_widget.load_ct(self.ct)
-            self.slice_viewers[0].set_ct(self.ct)
+    def add_grid(self, grid_name):
+        self.ct.add_grid(grid_name)
+        self.cloud_widget.add_grid(self.ct.grids[grid_name])
 
-    def select_electrode(self):
-        electrode_name = self.submission.input_box.text()
-        self.ct.confirm_selected_electrode(electrode_name)
-        self.cloud_widget.update()
-
-    def clean_scan(self):
-        self.ct.remove_isolated_points()
+    def add_electrode(self):
+        grid_name = self.submission.grid_name.text()
+        if not self.ct.contains_grid(grid_name):
+            self.add_grid(grid_name)
+        electrode_number = self.submission.electrode_number.text()
+        self.ct.add_selection_to_grid(grid_name, electrode_number)
         self.cloud_widget.update()
 
     def notify_slice_viewers(self, coordinate):
@@ -87,8 +101,14 @@ class ElectrodeSubmissionLayout(QtGui.QFrame):
         super(ElectrodeSubmissionLayout, self).__init__(parent)
 
         layout = QtGui.QVBoxLayout(self)
-        self.input_box = QtGui.QLineEdit()
-        layout.addWidget(self.input_box)
+
+        text_layout = QtGui.QHBoxLayout()
+        self.grid_name = QtGui.QLineEdit()
+        text_layout.addWidget(self.grid_name)
+        self.electrode_number = QtGui.QLineEdit()
+        text_layout.addWidget(self.electrode_number)
+        layout.addLayout(text_layout)
+
 
         self.submit_button = QtGui.QPushButton("Submit Electrode")
         layout.addWidget(self.submit_button)
@@ -118,4 +138,4 @@ class TaskBarLayout(QtGui.QHBoxLayout):
 
 
 if __name__ == '__main__':
-    PyLoc.launch()
+    PyLocView.launch()

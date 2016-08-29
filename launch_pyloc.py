@@ -1,6 +1,6 @@
 __author__ = 'iped'
 
-from view.pyloc import PyLoc
+from view.pylocview import PyLocView
 
 if __name__ == '__main__':
-    PyLoc.launch()
+    PyLocView.launch()

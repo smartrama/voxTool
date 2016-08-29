@@ -10,6 +10,15 @@ import random
 
 __author__ = 'iped'
 
+class PointCloudController(object):
+
+    def __init__(self, parent):
+        self.parent = parent
+        self.view = PointCloudWidget(self)
+
+
+
+
 class PointCloudWidget(QtGui.QWidget):
 
     def __init__(self, controller, parent=None ):
@@ -26,9 +35,8 @@ class PointCloudWidget(QtGui.QWidget):
         self.ct = None
         self.controller = controller
 
-
     def update(self):
-        self.viewer.set_groups(*self.ct.point_cloud_groups)
+        super(PointCloudWidget, self).update()
         self.viewer.update()
 
     def reload_ct(self, ct):
@@ -36,28 +44,30 @@ class PointCloudWidget(QtGui.QWidget):
         self.load_ct(ct)
 
     def load_ct(self, ct):
-        self.ct_view = PointCloudView(ct.all_points, self.ct_callback, -1, True)
-        self.selected_view = PointCloudView(ct.selected_points, self.selected_callback, 10)
-        self.viewer.add_views(self.ct_view, self.selected_view)
+        ct_view = PointCloudView(ct.all_points, -1, self.ct_callback, True)
+        selected_view = PointCloudView(ct.selected_points, 10, self.selected_callback)
+        self.viewer.add_view(ct_view)
+        self.viewer.add_view(selected_view)
         self.viewer.plot()
         self.ct = ct
+
+    def selected_callback(self, coordinate):
+        popup = Popup()
+        popup.show()
+        popup.raise_()
+
+    def add_view(self, view):
+        self.viewer.add_view(view)
+        self.viewer.update()
+
+    def add_grid(self, grid):
+        self.viewer.add_view(PointCloudView(grid))
 
     def ct_callback(self, coordinate):
         centered_coordinate = self.ct.select_centered_points_near(coordinate)
         self.viewer.update()
         self.controller.notify_slice_viewers(centered_coordinate)
 
-    def proposed_callback(self, picker):
-        pass
-
-    def missing_callback(self, picker):
-        pass
-
-    def confirmed_callback(self, picker):
-        pass
-
-    def selected_callback(self, picker):
-        pass
 
 class PointCloudViewer(HasTraits):
     BACKGROUND_COLOR = (.1, .1, .1)
@@ -66,59 +76,40 @@ class PointCloudViewer(HasTraits):
 
     def __init__(self, figure=None):
         super(PointCloudViewer, self).__init__()
-        self.point_cloud_views = []
-        self.point_cloud_groups = []
+        self.views = []
         self.figure = self.scene.mlab.gcf()
         mlab.figure(self.figure, bgcolor=self.BACKGROUND_COLOR)
-        self.picker = None
         self.plotted = False
-
-    @property
-    def views_and_groups(self):
-        views = self.point_cloud_views[:]
-        for group in self.point_cloud_groups:
-            views.extend(group)
-        return views
+        self.ct = None
+        self.picker = None
 
     def clear_views(self):
-        self.point_cloud_views = []
+        self.views = []
         self.figure.clf()
 
-    def add_views(self, *point_clouds):
-        self.point_cloud_views.extend(point_clouds)
-        self.refresh_picker_callback()
-
-    def set_groups(self, *groups):
-        self.point_cloud_groups = []
-        for group in groups:
-            self.point_cloud_groups.append([PointCloudView(pc) for pc in group])
-
-    def add_groups(self, *groups):
-        self.point_cloud_groups.extend(groups)
-
-    def refresh_picker_callback(self):
-        if not self.picker:
-            self.picker = MultiPlotPicker(self.figure, self.point_cloud_views, True)
-        else:
-            self.picker.point_cloud_views = self.point_cloud_views
+    def add_view(self, view):
+        self.views.append(view)
+        self.picker.point_cloud_views = self.views
 
     def plot(self):
-        all_views = sorted(self.views_and_groups, key=lambda v: v.priority)
+        if not self.picker:
+            self.picker =  MultiPlotPicker(self.figure, self.views)
+        all_views = sorted(self.views, key=lambda v: v.priority)
 
         for point_cloud_view in all_views:
             point_cloud_view.plot()
         self.plotted = True
 
-
     @on_trait_change('scene.activated')
     def update(self):
-        mlab.figure(self.figure, bgcolor=self.BACKGROUND_COLOR)
         if not self.plotted:
             self.plot()
         else:
-            self.refresh_picker_callback()
-            for point_cloud_view in self.views_and_groups:
-                point_cloud_view.update()
+            self.picker.point_cloud_views = self.views
+            mlab.figure(self.figure, bgcolor=self.BACKGROUND_COLOR)
+            views = sorted(self.views, key=lambda view: view.priority)
+            for view in views:
+                view.update()
 
     view = View(Item('scene', editor=SceneEditor(scene_class=MayaviScene),
                      height=250, width=300, show_label=False),
@@ -128,21 +119,25 @@ class PointCloudViewer(HasTraits):
 
 class MultiPlotPicker(object):
 
-    def __init__(self, figure, point_cloud_views, pass_through=True):
+    def __init__(self, figure, point_cloud_views):
         self.figure = figure
-        self.point_cloud_views = point_cloud_views
-        self.pass_through = pass_through
+        self.views = point_cloud_views
 
         self.picker = figure.on_mouse_pick(self.picker_callback)
         self.picker.tolerance = 0.01
 
     def picker_callback(self, picker):
         found = False
-        for point_cloud_view in self.point_cloud_views:
-            blocked = point_cloud_view.picker_callback(picker)
-            if blocked and not self.pass_through:
+        views_in = []
+        for view in self.views:
+            if view.contains_picker(picker):
+                views_in.append(view)
+        for view in views_in:
+            blocked = view.picker_callback(picker)
+            if blocked:
                 return True
         return found
+
 
 class PointCloudView(object):
 
@@ -168,10 +163,10 @@ class PointCloudView(object):
             seeded_random = random.Random(self.point_cloud.label)
             return np.ones(y.shape) * seeded_random.random()
 
-    def __init__(self, point_cloud, picker_callback=lambda *_:None, priority=0, never_update=False):
+    def __init__(self, point_cloud, priority=0, picker_callback=lambda *_:None, never_update=False):
         self.point_cloud = point_cloud
         self._custom_picker_callback = picker_callback
-        self.color = self.choose_color()
+        self.color = None
         self.colormap = self.choose_colormap()
         self._plot = None
         self._glyph_points = None
@@ -195,6 +190,28 @@ class PointCloudView(object):
             x, y, z = self.point_cloud.xyz
             self._plot.mlab_source.reset(x=x, y=y, z=z, scalars=self.choose_color())
 
+    def contains_picker(self, picker):
+        return self._plot and picker.pick_position in self.point_cloud
+
     def picker_callback(self, picker):
-        if self._plot and picker.actor in self._plot.actor.actors:
-            return self._custom_picker_callback(np.array(picker.pick_position))
+        return self._custom_picker_callback(np.array(picker.pick_position))
+
+
+class Popup(QtGui.QDialog):
+
+    def __init__(self, parent=None):
+        super(Popup, self).__init__(parent)
+        self.resize(40,100)
+
+    def showEvent(self, event):
+        geom = self.frameGeometry()
+        geom.moveCenter(QtGui.QCursor.pos())
+        self.setGeometry(geom)
+        super(Popup, self).showEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() == QtCore.Qt.Key_Escape:
+            self.hide()
+            event.accept()
+        else:
+            super(Popup, self).keyPressEvent(event)

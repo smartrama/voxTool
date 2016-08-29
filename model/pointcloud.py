@@ -77,20 +77,69 @@ class PointCloud(object):
     def __getitem__(self, item):
         return self.coordinates[item]
 
+    @property
+    def bounds(self):
+        return self.calculate_bounds()
+
+    def calculate_bounds(self):
+        x, y, z = self.xyz
+        return np.array([[min(x), min(y), min(z)], [max(x), max(y), max(z)]])
+
+    def __contains__(self, coordinate):
+        if ((coordinate - self.bounds[0,:]) > -1.5).all() and \
+                ((coordinate - self.bounds[1,:]) < 1.5).all():
+            return True
+        return False
 
 class Electrode(object):
 
-    def __init__(self, point_cloud, radius=4):
+    def __init__(self, point_cloud, electrode_number, grid_coordinate = (0,0), radius=4):
         self.point_cloud = point_cloud
+        self.number = electrode_number
         self.radius = radius
+        self.grid_coordinate = grid_coordinate
+        #self.bounds = self.calculate_bounds()
 
+    @property
+    def xyz(self):
+        return self.point_cloud.xyz
+
+    @property
+    def coordinates(self):
+        return self.point_cloud.coordinates
+
+    @property
+    def bounds(self):
+        return self.point_cloud.calculate_bounds()
+
+    def __contains__(self, coordinate):
+        return coordinate in self.point_cloud
 
 class Grid(object):
 
-    def __init__(self, electrodes, dimensions, spacing):
-        self.electrodes = electrodes
+    def __init__(self, grid_label, dimensions=(1,4), spacing=10):
+        self.label = grid_label
         self.dimensions = dimensions
+        self.electrodes = {}
         self.spacing = spacing
+
+    def add_electrode(self, electrode, grid_coordinate):
+        self.electrodes[grid_coordinate] = electrode
+
+    @property
+    def xyz(self):
+        coordinates = np.concatenate([electrode.coordinates for electrode in self.electrodes.values()])
+        return coordinates[:, 0], coordinates[:, 1], coordinates[:, 2]
+
+    @property
+    def coordinates(self):
+        return np.concatenate([electrode.coordinates for electrode in self.electrodes.values()])
+
+    def __contains__(self, coordinate):
+        for electrode in self.electrodes.values():
+            if coordinate in electrode:
+               return True
+        return False
 
 
 class CT(object):
@@ -103,12 +152,11 @@ class CT(object):
         self.data = img.get_data().squeeze()
         mask = self.data >= np.percentile(self.data, self.THRESHOLD)
         indices = np.array(mask.nonzero()).T
-        self.all_points = \
-            PointCloud('_ct', indices)
+        self.all_points = PointCloud('_ct', indices)
         self.selected_points = self.empty_cloud('_selected')
         self.proposed_electrodes = []
         self.missing_electrodes = []
-        self.confirmed_electrodes = []
+        self.grids = {}
 
     def remove_isolated_points(self):
         self.all_points.remove_isolated_points()
@@ -118,9 +166,8 @@ class CT(object):
         return self.all_points, self.selected_points
 
     @property
-    def point_cloud_groups(self):
-        return self.proposed_electrodes, self.missing_electrodes, self.confirmed_electrodes
-
+    def electrodes(self):
+        return self.proposed_electrodes + self.missing_electrodes
 
     @classmethod
     def empty_cloud(cls, label):
@@ -133,16 +180,21 @@ class CT(object):
     def select_points_near(self, point, nearby_range=10):
         self.select_points(self.all_points.get_points_in_range(point, nearby_range))
 
-    def select_centered_points_near(self, point, nearby_range=10, iterations=1):
-        self.select_points_near(point, nearby_range)
+    def select_centered_points_near(self, point, radius=10, iterations=1):
+        self.select_points_near(point, radius)
         for _ in range(iterations):
             centered_point = self.selected_points.get_center()
-            self.select_points_near(centered_point, nearby_range)
+            self.select_points_near(centered_point, radius)
         return self.selected_points.get_center()
 
-    def confirm_selected_electrode(self, name):
-        new_cloud = self.empty_cloud(name)
-        new_cloud = new_cloud.union(self.selected_points)
-        self.confirmed_electrodes.append(new_cloud)
-        self.selected_points.clear()
+    def add_grid(self, grid_label, *args):
+        self.grids[grid_label] = Grid(grid_label, *args)
+
+    def contains_grid(self, grid_label):
+        return grid_label in self.grids
+
+    def add_selection_to_grid(self, grid_label, electrode_number, radius=4):
+        cloud = PointCloud(grid_label, self.selected_points.coordinates)
+        electrode = Electrode(cloud, electrode_number, radius)
+        self.grids[grid_label].add_electrode(electrode, (electrode_number,))
 
