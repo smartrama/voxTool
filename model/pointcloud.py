@@ -72,7 +72,7 @@ class PointCloud(object):
         if len(self.coordinates.shape) > 1 and self.coordinates.shape[1] > 0:
             return self.coordinates[:, 0], self.coordinates[:, 1], self.coordinates[:, 2]
         else:
-            return [], [], []
+            return np.array([[], [], []])
 
     def __getitem__(self, item):
         return self.coordinates[item]
@@ -83,6 +83,8 @@ class PointCloud(object):
 
     def calculate_bounds(self):
         x, y, z = self.xyz
+        if len(x) == 0:
+            return np.array([[0, 0, 0], [0, 0, 0]])
         return np.array([[min(x), min(y), min(z)], [max(x), max(y), max(z)]])
 
     def __contains__(self, coordinate):
@@ -93,7 +95,8 @@ class PointCloud(object):
 
 class Electrode(object):
 
-    def __init__(self, point_cloud, electrode_number, grid_coordinate = (0,0), radius=4):
+    def __init__(self, electrode_label, point_cloud, electrode_number, grid_coordinate = (0,0), radius=4):
+        self.label = electrode_label
         self.point_cloud = point_cloud
         self.number = electrode_number
         self.radius = radius
@@ -180,7 +183,7 @@ class CT(object):
     def select_points_near(self, point, nearby_range=10):
         self.select_points(self.all_points.get_points_in_range(point, nearby_range))
 
-    def select_centered_points_near(self, point, radius=10, iterations=1):
+    def select_weighted_center(self, point, radius=10, iterations=1):
         self.select_points_near(point, radius)
         for _ in range(iterations):
             centered_point = self.selected_points.get_center()

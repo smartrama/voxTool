@@ -27,7 +27,7 @@ class SliceViewWidget(QtGui.QWidget):
         #self.uis = [
         #    view.edit_traits(parent=self,
         #                     kind='subpanel').control
-        #    for view in self.views
+        #    for view in self.clouds
         #]
         splitter = QtGui.QSplitter(QtCore.Qt.Vertical)
         for view in self.views:
@@ -40,10 +40,6 @@ class SliceViewWidget(QtGui.QWidget):
 
         layout = QtGui.QHBoxLayout(self)
         layout.addWidget(splitter)
-
-    def set_ct(self, ct):
-        for view in self.views:
-            view.set_image(ct.data)
 
     def set_coordinate(self, coordinate):
         for slice_view in self.views:
@@ -90,19 +86,17 @@ class SliceView(FigureCanvas):
         self.axis = axis
 
     def plot(self):
+        if len(list(self.coordinate)) == 0:
+            return
+
         if self.axis is None or self.image is None:
             return
         plot_plane = [slice(0, self.image.shape[i]) for i in range(3)]
         plot_plane[self.axis] = int(self.coordinate[self.axis])
 
         plotted_image = self.image[plot_plane]
-#        if self.axis != 3:
         plotted_image = np.flipud(plotted_image.T)
-        #mlab.figure(self.scene.mayavi_scene)
         extent = [0, plotted_image.shape[0], 0, plotted_image.shape[1], 0, 0]
-        #ax = mlab.axes(extent=extent)
-        #self.axes.set_xlim(*extent[0:2])
-        #self.axes.set_ylim(*extent[2:4])
         self.axes.cla()
         self.axes.set_xlabel('')
         self.axes.set_ylabel('')

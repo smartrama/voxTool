@@ -1,6 +1,7 @@
 __author__ = 'iped'
 
-from view.pylocview import PyLocView
+from view.pyloc_view import PyLocControl
 
 if __name__ == '__main__':
-    PyLocView.launch()
+    controller = PyLocControl('/Users/iped/PycharmProjects/voxTool/R1170J_CT_combined.nii.gz')
+    controller.exec_()
