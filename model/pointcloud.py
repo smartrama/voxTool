@@ -60,7 +60,7 @@ class PointCloud(object):
         print 'Getting distances...'
         dists = scipy.spatial.distance.pdist(self.coordinates, 'cityblock')
         print 'Thresholding'
-        mask = scipy.spatial.distance.squareform((dists <= 1)).any(0)
+        mask = scipy.spatial.distance.squareform((dists <= 1)).sum(0) > 1
         print 'Removing {} points'.format(np.count_nonzero(mask == 0))
         self.coordinates = self.coordinates[mask, :]
 
@@ -95,10 +95,11 @@ class PointCloud(object):
 
 class Electrode(object):
 
-    def __init__(self, electrode_label, point_cloud, electrode_number, grid_coordinate = (0,0), radius=4):
+    def __init__(self, point_cloud, electrode_label, electrode_number, grid_coordinate = (0,0), type='G', radius=4):
         self.label = electrode_label
         self.point_cloud = point_cloud
         self.number = electrode_number
+        self.type = type
         self.radius = radius
         self.grid_coordinate = grid_coordinate
         #self.bounds = self.calculate_bounds()
@@ -131,8 +132,11 @@ class Grid(object):
 
     @property
     def xyz(self):
-        coordinates = np.concatenate([electrode.coordinates for electrode in self.electrodes.values()])
-        return coordinates[:, 0], coordinates[:, 1], coordinates[:, 2]
+        if self.electrodes.values():
+            coordinates = np.concatenate([electrode.coordinates for electrode in self.electrodes.values()])
+            return coordinates[:, 0], coordinates[:, 1], coordinates[:, 2]
+        else:
+            return np.array([[], [], []])
 
     @property
     def coordinates(self):
@@ -196,8 +200,11 @@ class CT(object):
     def contains_grid(self, grid_label):
         return grid_label in self.grids
 
-    def add_selection_to_grid(self, grid_label, electrode_number, radius=4):
+    def add_selection_to_grid(self, grid_label, electrode_label, radius=4):
         cloud = PointCloud(grid_label, self.selected_points.coordinates)
-        electrode = Electrode(cloud, electrode_number, radius)
-        self.grids[grid_label].add_electrode(electrode, (electrode_number,))
+        electrode = Electrode(cloud, electrode_label, radius)
+        self.grids[grid_label].add_electrode(electrode, (electrode_label,))
 
+    def create_electrode_from_selection(self, electrode_label, radius):
+        cloud = PointCloud(electrode_label, self.selected_points.coordinates)
+        return Electrode(cloud, electrode_label, radius)

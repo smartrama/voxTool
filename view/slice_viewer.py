@@ -86,9 +86,6 @@ class SliceView(FigureCanvas):
         self.axis = axis
 
     def plot(self):
-        if len(list(self.coordinate)) == 0:
-            return
-
         if self.axis is None or self.image is None:
             return
         plot_plane = [slice(0, self.image.shape[i]) for i in range(3)]

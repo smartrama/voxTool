@@ -2,7 +2,7 @@ import os
 os.environ['ETS_TOOLKIT'] = 'qt4'
 
 from pyface.qt import QtGui, QtCore
-from model.pointcloud import CT
+from model.pointcloud import CT, Grid
 from mayavi.core.ui.api import MayaviScene, MlabSceneModel, \
         SceneEditor
 
@@ -55,22 +55,59 @@ class PyLocControl(object):
 
     def clean_ct_scan(self):
         self.ct.remove_isolated_points()
-        self.view.update_cloud(self.ct.all_points)
+        self.view.update_cloud(self.ct.all_points.label)
 
     def update_cloud(self, cloud):
         self.view.update_cloud(cloud)
 
     def select_coordinate(self, coordinate):
         centered_coordinate = self.ct.select_weighted_center(coordinate)
-        self.view.update_cloud(self.ct.selected_points)
+        self.view.update_cloud(self.ct.selected_points.label)
+        if np.isnan(centered_coordinate).all():
+            return
         self.view.update_slices(centered_coordinate)
+
+    GRID_PRIORITY=1
 
     def add_grid(self, grid):
         self.ct.grids[grid.label] = grid
+        self.view.add_cloud(grid, self.GRID_PRIORITY)
 
     def add_electrode(self, electrode, grid_label, grid_coordinates):
         self.ct.grids[grid_label].add_electrode(electrode, grid_coordinates)
+        self.view.update_cloud(grid_label)
+        self.view.update_list(self.ct.grids.values())
 
+    def add_selected_electrode(self):
+        grid_label = self.get_grid_label()
+        electrode_label = self.get_electrode_label()
+        grid_coordinates = self.get_grid_coordinates()
+        if not self.ct.contains_grid(grid_label):
+            self.add_grid(Grid(grid_label))
+        electrode = self.ct.create_electrode_from_selection(electrode_label, 10)
+        self.add_electrode(electrode, grid_label, grid_coordinates)
+        self.view.submission_layout.contact_edit.setText(str(int(electrode_label) + 1))
+        self.view.submission_layout.coordinates_y_edit.setText(
+            str(grid_coordinates[1] + 1)
+        )
+
+    def key_pressed(self, e):
+        self.add_selected_electrode()
+
+    def get_grid_label(self):
+        return str(self.view.submission_layout.lead_edit.text())
+
+    def get_electrode_label(self):
+        return str(self.view.submission_layout.contact_edit.text())
+
+    def get_grid_coordinates(self):
+        return (int(self.view.submission_layout.coordinates_x_edit.text()),
+                int(self.view.submission_layout.coordinates_y_edit.text()))
+
+    def update_electrode_lead(self):
+        self.view.submission_layout.contact_grid_label.setText(
+            self.view.submission_layout.lead_edit.text()
+        )
 
 class PyLocView(QtGui.QWidget):
 
@@ -98,15 +135,30 @@ class PyLocView(QtGui.QWidget):
 
     def add_callbacks(self):
         self.task_bar.load_scan_button.clicked.connect(self.controller.choose_ct_scan)
-        self.submission_layout.submit_button.clicked.connect(self.controller.add_electrode)
+        self.submission_layout.submit_button.clicked.connect(self.controller.add_selected_electrode)
         self.task_bar.clean_button.clicked.connect(self.controller.clean_ct_scan)
+        self.submission_layout.lead_edit.textChanged.connect(self.controller.update_electrode_lead)
+        self.cloud_widget.viewer.scene.interactor.add_observer('KeyPresEvent', self.controller.key_pressed)
+
 
     def update_slices(self, coordinate):
         self.ct_slice_viewer.set_coordinate(coordinate)
         self.ct_slice_viewer.update()
 
-    def update_cloud(self, cloud):
-        self.cloud_widget.update_cloud(cloud)
+    def update_cloud(self, cloud_label):
+        self.cloud_widget.update_cloud(cloud_label)
+
+    def update_list(self, grids):
+        self.submission_layout.list_widget.clear()
+
+        for grid in sorted(grids, key=lambda grid: grid.label):
+            for coordinates, lead in sorted(grid.electrodes.items()):
+                self.submission_layout.list_widget.addItem(
+                    '{}{} {} ({},{})'.format(grid.label, lead.label, lead.type, *coordinates)
+                )
+
+
+
 
     def add_cloud(self, cloud, priority=0, callback=None):
         self.cloud_widget.add_cloud(cloud, priority, callback)
@@ -127,12 +179,56 @@ class ElectrodeSubmissionLayout(QtGui.QFrame):
 
         layout = QtGui.QVBoxLayout(self)
 
-        text_layout = QtGui.QHBoxLayout()
-        self.grid_name = QtGui.QLineEdit()
-        text_layout.addWidget(self.grid_name)
-        self.electrode_number = QtGui.QLineEdit()
-        text_layout.addWidget(self.electrode_number)
-        layout.addLayout(text_layout)
+        top_layout = QtGui.QVBoxLayout()
+        contact_label = QtGui.QLabel("Lead Information")
+        top_layout.addWidget(contact_label)
+
+        lead_layout = QtGui.QHBoxLayout()
+        self.lead_edit = QtGui.QLineEdit()
+        lead_layout.addWidget(self.lead_edit)
+        dimensions_layout = QtGui.QHBoxLayout()
+        dimensions_layout.setSpacing(0)
+        dimensions_layout.addWidget(QtGui.QLabel("("))
+        self.dimensions_x_edit = QtGui.QLineEdit()
+        self.dimensions_x_edit.setMinimumWidth(30)
+        self.dimensions_x_edit.setMaximumWidth(30)
+        dimensions_layout.addWidget(self.dimensions_x_edit)
+        dimensions_layout.addWidget(QtGui.QLabel(","))
+        self.dimensions_y_edit = QtGui.QLineEdit()
+        self.dimensions_y_edit.setMinimumWidth(30)
+        self.dimensions_y_edit.setMaximumWidth(30)
+        dimensions_layout.addWidget(self.dimensions_y_edit)
+        dimensions_layout.addWidget(QtGui.QLabel(")"))
+        lead_layout.addLayout(dimensions_layout)
+
+        top_layout.addLayout(lead_layout)
+
+        layout.addLayout(top_layout)
+
+        contact_label = QtGui.QLabel("Contact Information")
+        top_layout.addWidget(contact_label)
+
+        contact_layout = QtGui.QHBoxLayout()
+        self.contact_grid_label = QtGui.QLabel("---")
+        contact_layout.addWidget(self.contact_grid_label)
+        self.contact_edit = QtGui.QLineEdit()
+        contact_layout.addWidget(self.contact_edit)
+        coordinates_layout = QtGui.QHBoxLayout()
+        coordinates_layout.setSpacing(0)
+        coordinates_layout.addWidget(QtGui.QLabel("("))
+        self.coordinates_x_edit = QtGui.QLineEdit()
+        self.coordinates_x_edit.setMinimumWidth(30)
+        self.coordinates_x_edit.setMaximumWidth(30)
+        coordinates_layout.addWidget(self.coordinates_x_edit)
+        coordinates_layout.addWidget(QtGui.QLabel(","))
+        self.coordinates_y_edit = QtGui.QLineEdit()
+        self.coordinates_y_edit.setMinimumWidth(30)
+        self.coordinates_y_edit.setMaximumWidth(30)
+        coordinates_layout.addWidget(self.coordinates_y_edit)
+        coordinates_layout.addWidget(QtGui.QLabel(")"))
+        contact_layout.addLayout(coordinates_layout)
+
+        top_layout.addLayout(contact_layout)
 
         self.submit_button = QtGui.QPushButton("Submit Electrode")
         layout.addWidget(self.submit_button)
@@ -140,7 +236,7 @@ class ElectrodeSubmissionLayout(QtGui.QFrame):
         title = QtGui.QLabel("Electrodes")
         layout.addWidget(title)
 
-        self.list_widget = QtGui.QListView()
+        self.list_widget = QtGui.QListWidget()
         layout.addWidget(self.list_widget)
 
         self.modify_button = QtGui.QPushButton("Modify Electrode")
@@ -176,8 +272,8 @@ class PointCloudWidget(QtGui.QWidget):
         self.controller = controller
         self.clouds = {}
 
-    def update_cloud(self, cloud):
-        self.viewer.update_cloud(cloud)
+    def update_cloud(self, cloud_label):
+        self.viewer.update_cloud(cloud_label)
 
     def add_cloud(self, cloud, priority=0, callback=None):
         self.viewer.add_cloud(cloud, priority, callback)
@@ -204,8 +300,8 @@ class CloudViewer(HasTraits):
         for cloud_label in self.clouds.keys():
             self.remove_cloud(cloud_label)
 
-    def update_cloud(self, cloud):
-        self.clouds[cloud.label].update()
+    def update_cloud(self, cloud_label):
+        self.clouds[cloud_label].update()
 
     def add_cloud(self, cloud, priority=0, callback=None):
         self.clouds[cloud.label] = CloudView(cloud, priority, callback)
