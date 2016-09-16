@@ -152,6 +152,7 @@ class Grid(object):
 class CT(object):
 
     THRESHOLD = 99.96
+    #THRESHOLD = 98
 
     def __init__(self, img_file):
         self.img_file = img_file

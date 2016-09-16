@@ -393,7 +393,7 @@ class CloudView(object):
 
     def plot(self):
         x, y, z = self.point_cloud.xyz
-        self._plot = mlab.points3d(x, y, z, self.get_color(),
+        self._plot = mlab.points3d(x, y, z, self.get_color(), mask_points=10,
                                    mode='cube', resolution=3,
                                    colormap=self.get_colormap(),
                                    vmax=1, vmin=0,
