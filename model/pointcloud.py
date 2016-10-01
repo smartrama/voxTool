@@ -2,11 +2,12 @@ import nibabel as nib
 import numpy as np
 import scipy.spatial.distance
 from scipy.ndimage.measurements import label
+from scipy.stats.mstats import mode
 
 __author__ = 'iped'
 
-class PointCloud(object):
 
+class PointCloud(object):
     TYPES = lambda: None
     TYPES.CT = 1
     TYPES.PROPOSED_ELECTRODE = 2
@@ -15,11 +16,11 @@ class PointCloud(object):
     TYPES.SELECTED = 5
 
     def __init__(self, label, coordinates):
-        self.coordinates, self.label =\
+        self.coordinates, self.label = \
             coordinates, label
 
     def clear(self):
-        self.coordinates = np.array([[],[],[]]).T
+        self.coordinates = np.array([[], [], []]).T
 
     def add_coordinates(self, coordinates):
         coord_set = self.setify_coords(coordinates)
@@ -89,21 +90,21 @@ class PointCloud(object):
         return np.array([[min(x), min(y), min(z)], [max(x), max(y), max(z)]])
 
     def __contains__(self, coordinate):
-        if ((coordinate - self.bounds[0,:]) > -1.5).all() and \
-                ((coordinate - self.bounds[1,:]) < 1.5).all():
+        if ((coordinate - self.bounds[0, :]) > -1.5).all() and \
+                ((coordinate - self.bounds[1, :]) < 1.5).all():
             return True
         return False
 
-class Electrode(object):
 
-    def __init__(self, point_cloud, electrode_label, electrode_number, grid_coordinate = (0,0), type='G', radius=4):
+class Electrode(object):
+    def __init__(self, point_cloud, electrode_label, electrode_number, grid_coordinate=(0, 0), type='G', radius=4):
         self.label = electrode_label
         self.point_cloud = point_cloud
         self.number = electrode_number
         self.type = type
         self.radius = radius
         self.grid_coordinate = grid_coordinate
-        #self.bounds = self.calculate_bounds()
+        # self.bounds = self.calculate_bounds()
 
     @property
     def xyz(self):
@@ -120,9 +121,9 @@ class Electrode(object):
     def __contains__(self, coordinate):
         return coordinate in self.point_cloud
 
-class Grid(object):
 
-    def __init__(self, grid_label, dimensions=(1,4), spacing=10):
+class Grid(object):
+    def __init__(self, grid_label, dimensions=(1, 4), spacing=10):
         self.label = grid_label
         self.dimensions = dimensions
         self.electrodes = {}
@@ -146,21 +147,23 @@ class Grid(object):
     def __contains__(self, coordinate):
         for electrode in self.electrodes.values():
             if coordinate in electrode:
-               return True
+                return True
         return False
 
 
 class CT(object):
-
     THRESHOLD = 99.96
-    #THRESHOLD = 98
+
+    # THRESHOLD = 98
 
     def __init__(self, img_file):
         self.img_file = img_file
         img = nib.load(self.img_file)
         self.data = img.get_data().squeeze()
-        mask = self.data >= max(np.percentile(self.data, self.THRESHOLD),1) # ?? REVERT BACK - just for testing
+        mask = self.data >= max(np.percentile(self.data, self.THRESHOLD), 1)  # ?? REVERT BACK - just for testing
         indices = np.array(mask.nonzero()).T
+        connected_points, num_features = label(mask)
+        self.connected_points = connected_points[mask]
         self.all_points = PointCloud('_ct', indices)
         self.selected_points = self.empty_cloud('_selected')
         self.proposed_electrodes = []
@@ -187,7 +190,18 @@ class CT(object):
         self.selected_points.add_coordinates(points)
 
     def select_points_near(self, point, nearby_range=10):
-        self.select_points(self.all_points.get_points_in_range(point, nearby_range))
+        """
+        Computes the nearest connected components in the point cloud that is within nearby_range of point.
+
+        :param point:
+        :param nearby_range:
+        :return: None
+        """
+        vector_dist = self.all_points.coordinates - point
+        dists = np.sqrt(np.sum(np.square(vector_dist), 1))
+        conn_comp_id, _ = mode(self.connected_points[dists < 1])  # ?? Change 1 to nearby_range
+        self.select_points(self.all_points.coordinates[self.connected_points == conn_comp_id[0]])
+        # self.select_points(self.all_points.get_points_in_range(point, nearby_range))
 
     def select_weighted_center(self, point, radius=10, iterations=1):
         self.select_points_near(point, radius)
