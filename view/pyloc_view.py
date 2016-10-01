@@ -1,10 +1,11 @@
 import os
+
 os.environ['ETS_TOOLKIT'] = 'qt4'
 
 from pyface.qt import QtGui, QtCore
 from model.pointcloud import CT, Grid
 from mayavi.core.ui.api import MayaviScene, MlabSceneModel, \
-        SceneEditor
+    SceneEditor
 
 import numpy as np
 from model.pointcloud import PointCloud
@@ -12,17 +13,16 @@ from mayavi import mlab
 from traits.api import HasTraits, Instance, on_trait_change
 from traitsui.api import View, Item
 from mayavi.core.ui.api import MayaviScene, MlabSceneModel, \
-        SceneEditor
+    SceneEditor
 from pyface.qt import QtGui, QtCore
 import random
-
 
 from slice_viewer import SliceViewWidget
 
 __author__ = 'iped'
 
-class PyLocControl(object):
 
+class PyLocControl(object):
     def __init__(self, ct_filename=None):
 
         self.app = QtGui.QApplication.instance()
@@ -67,7 +67,7 @@ class PyLocControl(object):
             return
         self.view.update_slices(centered_coordinate)
 
-    GRID_PRIORITY=1
+    GRID_PRIORITY = 1
 
     def add_grid(self, grid):
         self.ct.grids[grid.label] = grid
@@ -83,7 +83,8 @@ class PyLocControl(object):
         electrode_label = self.get_electrode_label()
         grid_coordinates = self.get_grid_coordinates()
         if not self.ct.contains_grid(grid_label):
-            self.add_grid(Grid(grid_label))
+            grid_dimensions = self.get_grid_dimensions()
+            self.add_grid(Grid(grid_label, dimensions=grid_dimensions))
         electrode = self.ct.create_electrode_from_selection(electrode_label, 10)
         self.add_electrode(electrode, grid_label, grid_coordinates)
         self.view.submission_layout.contact_edit.setText(str(int(electrode_label) + 1))
@@ -104,13 +105,20 @@ class PyLocControl(object):
         return (int(self.view.submission_layout.coordinates_x_edit.text()),
                 int(self.view.submission_layout.coordinates_y_edit.text()))
 
+    def get_grid_dimensions(self):
+        return (int(self.view.submission_layout.dimensions_x_edit.text()),
+                int(self.view.submission_layout.dimensions_y_edit.text()))
+
     def update_electrode_lead(self):
         self.view.submission_layout.contact_grid_label.setText(
             self.view.submission_layout.lead_edit.text()
         )
 
-class PyLocView(QtGui.QWidget):
+    def interpolate_main(self):
+        print self.ct.grids['RG']
 
+
+class PyLocView(QtGui.QWidget):
     def __init__(self, controller, parent=None):
         QtGui.QWidget.__init__(self, parent)
         self.controller = controller
@@ -136,10 +144,10 @@ class PyLocView(QtGui.QWidget):
     def add_callbacks(self):
         self.task_bar.load_scan_button.clicked.connect(self.controller.choose_ct_scan)
         self.submission_layout.submit_button.clicked.connect(self.controller.add_selected_electrode)
+        self.submission_layout.interpolate_button.clicked.connect(self.controller.interpolate_main)
         self.task_bar.clean_button.clicked.connect(self.controller.clean_ct_scan)
         self.submission_layout.lead_edit.textChanged.connect(self.controller.update_electrode_lead)
         self.cloud_widget.viewer.scene.interactor.add_observer('KeyPresEvent', self.controller.key_pressed)
-
 
     def update_slices(self, coordinate):
         self.ct_slice_viewer.set_coordinate(coordinate)
@@ -157,9 +165,6 @@ class PyLocView(QtGui.QWidget):
                     '{}{} {} ({},{})'.format(grid.label, lead.label, lead.type, *coordinates)
                 )
 
-
-
-
     def add_cloud(self, cloud, priority=0, callback=None):
         self.cloud_widget.add_cloud(cloud, priority, callback)
 
@@ -172,8 +177,8 @@ class PyLocView(QtGui.QWidget):
     def clear(self):
         self.cloud_widget.clear()
 
-class ElectrodeSubmissionLayout(QtGui.QFrame):
 
+class ElectrodeSubmissionLayout(QtGui.QFrame):
     def __init__(self, parent=None):
         super(ElectrodeSubmissionLayout, self).__init__(parent)
 
@@ -239,12 +244,14 @@ class ElectrodeSubmissionLayout(QtGui.QFrame):
         self.list_widget = QtGui.QListWidget()
         layout.addWidget(self.list_widget)
 
+        self.interpolate_button = QtGui.QPushButton("Interpolate!")
+        layout.addWidget(self.interpolate_button)
+
         self.modify_button = QtGui.QPushButton("Modify Electrode")
         layout.addWidget(self.modify_button)
 
 
 class TaskBarLayout(QtGui.QHBoxLayout):
-
     def __init__(self, parent=None):
         super(TaskBarLayout, self).__init__(parent)
         self.load_scan_button = QtGui.QPushButton("Load Scan")
@@ -258,8 +265,7 @@ class TaskBarLayout(QtGui.QHBoxLayout):
 
 
 class PointCloudWidget(QtGui.QWidget):
-
-    def __init__(self, controller, parent=None ):
+    def __init__(self, controller, parent=None):
         QtGui.QWidget.__init__(self, parent)
         layout = QtGui.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -283,6 +289,7 @@ class PointCloudWidget(QtGui.QWidget):
 
     def clear(self):
         self.viewer.clear_views()
+
 
 class CloudViewer(HasTraits):
     BACKGROUND_COLOR = (.1, .1, .1)
@@ -333,7 +340,6 @@ class CloudViewer(HasTraits):
 
 
 class CloudPicker(object):
-
     def __init__(self, figure):
         self.figure = figure
         self.clouds = {}
@@ -361,7 +367,6 @@ class CloudPicker(object):
 
 
 class CloudView(object):
-
     def get_colormap(self):
         if self.point_cloud.label == '_ct':
             return 'bone'
@@ -414,10 +419,9 @@ class CloudView(object):
 
 
 class Popup(QtGui.QDialog):
-
     def __init__(self, parent=None):
         super(Popup, self).__init__(parent)
-        self.resize(40,100)
+        self.resize(40, 100)
 
     def showEvent(self, event):
         geom = self.frameGeometry()

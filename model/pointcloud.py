@@ -1,6 +1,7 @@
 import nibabel as nib
 import numpy as np
 import scipy.spatial.distance
+from scipy.ndimage.measurements import label
 
 __author__ = 'iped'
 
@@ -158,7 +159,7 @@ class CT(object):
         self.img_file = img_file
         img = nib.load(self.img_file)
         self.data = img.get_data().squeeze()
-        mask = self.data >= np.percentile(self.data, self.THRESHOLD)
+        mask = self.data >= max(np.percentile(self.data, self.THRESHOLD),1) # ?? REVERT BACK - just for testing
         indices = np.array(mask.nonzero()).T
         self.all_points = PointCloud('_ct', indices)
         self.selected_points = self.empty_cloud('_selected')
