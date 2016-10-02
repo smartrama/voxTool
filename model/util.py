@@ -3,8 +3,6 @@
 """ This utility module interpolates all electrode grids in a strip or grid configuration.
 """
 
-import numpy as np
-
 __version__ = '0.1'
 __author__ = 'Xavier Islam'
 __email__ = 'islamx@seas.upenn.edu'
@@ -78,6 +76,87 @@ def interpol(coor1, coor2, coor3, m, n):
                 configuration being a strip.')
         return interpol_grid(coor1, coor2, coor3, m, n)
 
+
+import math
+
+import numpy as np
+
+
+def rotation_matrix(axis, theta):
+    """
+    Return the rotation matrix associated with counterclockwise rotation about
+    the given axis by theta radians.
+    """
+    axis = np.asarray(axis)
+    axis = axis / math.sqrt(np.dot(axis, axis))
+    a = math.cos(theta / 2.0)
+    b, c, d = -axis * math.sin(theta / 2.0)
+    aa, bb, cc, dd = a * a, b * b, c * c, d * d
+    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
+    return np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+
+
+def interpol_grid_helper(coor1, coor1_coord, coor2, coor2_coord, coor3, coor3_coord):
+    """
+    ??? FIX when time possible
+
+    :param coor1:
+    :param coor1_coord:
+    :param coor2:
+    :param coor2_coord:
+    :param coor3:
+    :param coor3_coord:
+    :param m:
+    :param n:
+    :return:
+    """
+
+    coor1_p = np.array([coor1_coord[1], -coor1_coord[0]])
+    coor2_p = np.array([coor2_coord[1], -coor2_coord[0]])
+    coor3_p = np.array([coor3_coord[1], -coor3_coord[0]])
+    delta = np.array([-coor1_coord[1], coor1_coord[0]])
+
+    coor1_p = coor1_p + delta
+    coor2_p = coor2_p + delta
+    coor3_p = coor3_p + delta
+
+    coor21 = coor2 - coor1
+    coor31 = coor3 - coor1
+
+    x21 = coor2_p - coor1_p
+    x31 = coor3_p - coor1_p
+    theta_x = np.arctan(x21[1] * 1.0 / x21[0])
+    theta_y = np.arctan(x31[0] * 1.0 / x31[1])
+    print x21, x31, theta_x, theta_y
+
+    cross_product = np.cross(coor21, coor31)
+    axis = cross_product / np.sqrt(np.sum(np.square(cross_product), axis=0))
+
+    if (x21[0] < 0):
+        if (x21[1] < 0):
+            res_x = np.dot(rotation_matrix(axis, np.pi - theta_x), coor2)
+        else:
+            res_x = np.dot(rotation_matrix(axis, np.pi + theta_x), coor2)
+    else:
+        res_x = np.dot(rotation_matrix(axis, theta_x), coor2)
+    print res_x
+    if (x21[0]):
+        res_x = res_x / np.abs(x21[0])
+    else:
+        res_x = res_x / np.abs(x21[1])
+
+    if (x31[0] < 0):
+        res_y = np.dot(rotation_matrix(axis, np.pi - theta_y), coor3)
+    else:
+        res_y = np.dot(rotation_matrix(axis, theta_y), coor3)
+    print res_y
+    if (x31[1]):
+        res_y = res_y / x31[1]
+    else:
+        res_y = res_y / x31[0]
+    print res_x, res_y
 
 
 def interpol_grid(coor1, coor2, coor3, m, n):
