@@ -162,7 +162,7 @@ class CT(object):
         self.img_file = img_file
         img = nib.load(self.img_file)
         self.data = img.get_data().squeeze()
-        mask = self.data >= max(np.percentile(self.data, self.THRESHOLD), 1)  # ?? REVERT BACK - just for testing
+        mask = self.data >= max(np.percentile(self.data, self.THRESHOLD), 1)
         indices = np.array(mask.nonzero()).T
         connected_points, num_features = label(mask)
         self.connected_points = connected_points[mask]
@@ -202,10 +202,10 @@ class CT(object):
         vector_dist = self.all_points.coordinates - point
         dists = np.sqrt(np.sum(np.square(vector_dist), 1))
 
-        conn_comp_id, _ = mode(self.connected_points[dists < nearby_range])  # ?? Change 1 to nearby_range
+        conn_comp_id, _ = mode(self.connected_points[dists < nearby_range])
         while not (conn_comp_id[0]):
             nearby_range += 1
-            conn_comp_id, _ = mode(self.connected_points[dists < nearby_range])  # ?? Change 1 to nearby_range
+            conn_comp_id, _ = mode(self.connected_points[dists < nearby_range])
         self.select_points(self.all_points.coordinates[self.connected_points == conn_comp_id[0]])
         # self.select_points(self.all_points.get_points_in_range(point, nearby_range))
 
@@ -237,10 +237,17 @@ class CT(object):
             self.interpolate(grid_label)
 
     def interpolate(self, grid_label):
+        """
+        Interpolates on either grid or strip. Requires that all 4 corners in the case of a grid or 2 contacts in the
+        case of strips have been labeled and submitted.
+
+        :param grid_label: Label of grid and strip
+        :return: None
+        """
         d = self.grids[grid_label].dimensions
 
         # Check if grid
-        if (d[1] > 1):
+        if d[1] > 1:
             # Check to see all 4 corners present in grid
             if all(x in self.grids[grid_label].electrodes.keys() for x in [(1, 1), (1, d[1]), (d[0], 1), (d[0], d[1])]):
                 # Interpolate
@@ -273,5 +280,3 @@ class CT(object):
                     self.select_points_near(point, nearby_range=1)
                     self.add_selection_to_grid(grid_label, str(ii + int(start)), grid_coordinate, grid_type='S',
                                                radius=4)
-
-
