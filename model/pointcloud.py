@@ -241,7 +241,22 @@ class CT(object):
 
         # Check if grid
         if (d[1] > 1):
-            self.interpolate_grid(grid_label)
+            # Check to see all 4 corners present in grid
+            if all(x in self.grids[grid_label].electrodes.keys() for x in [(1, 1), (1, d[1]), (d[0], 1), (d[0], d[1])]):
+                # Interpolate
+                start = self.grids[grid_label].electrodes[(1, 1)].label
+                coor1 = self.grids[grid_label].electrodes[(1, 1)].point_cloud.get_center()
+                coor2 = self.grids[grid_label].electrodes[(1, d[1])].point_cloud.get_center()
+                coor3 = self.grids[grid_label].electrodes[(d[0], d[1])].point_cloud.get_center()
+
+                points = util.interpol(coor1, coor2, coor3, d[0], d[1])
+
+                # Select point (snap) to the closes point
+                for ii, point in enumerate(points):
+                    grid_coordinate = np.unravel_index([ii], d)
+                    grid_coordinate = tuple(map(lambda x: int(x) + 1, grid_coordinate))
+                    self.select_points_near(point, nearby_range=1)
+                    self.add_selection_to_grid(grid_label, str(ii + int(start)), grid_coordinate, radius=4)
         else:
             # Check to see all 4 corners present in grid
             if all(x in self.grids[grid_label].electrodes.keys() for x in [(1, 1), (d[0], 1)]):
@@ -259,34 +274,4 @@ class CT(object):
                     self.add_selection_to_grid(grid_label, str(ii + int(start)), grid_coordinate, grid_type='S',
                                                radius=4)
 
-    def interpolate_grid(self, grid_label):
-        # Check to see at least 3 point present in grid
-        if not (len(self.grids[grid_label].electrodes.keys()) >= 3):
-            return
 
-        # Sort based on grid coordinate
-        grid_coordx = sorted(self.grids[grid_label].electrodes.keys())
-
-        # Iterate over all current points 3 at a time
-        for grid_coord in grid_coordx:
-            pass
-            # Get inteporlated plane points based on 3 points
-
-            # Get appropriate grid_coordinate
-
-        # Check to see all 4 corners present in grid
-        if all(x in self.grids[grid_label].electrodes.keys() for x in [(1, 1), (1, d[1]), (d[0], 1), (d[0], d[1])]):
-            # Interpolate
-            start = self.grids[grid_label].electrodes[(1, 1)].label
-            coor1 = self.grids[grid_label].electrodes[(1, 1)].point_cloud.get_center()
-            coor2 = self.grids[grid_label].electrodes[(1, d[1])].point_cloud.get_center()
-            coor3 = self.grids[grid_label].electrodes[(d[0], d[1])].point_cloud.get_center()
-
-            points = util.interpol(coor1, coor2, coor3, d[0], d[1])
-
-            # Select point (snap) to the closes point
-            for ii, point in enumerate(points):
-                grid_coordinate = np.unravel_index([ii], d)
-                grid_coordinate = tuple(map(lambda x: int(x) + 1, grid_coordinate))
-                self.select_points_near(point, nearby_range=1)
-                self.add_selection_to_grid(grid_label, str(ii + int(start)), grid_coordinate, radius=4)
