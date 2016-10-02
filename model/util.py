@@ -67,7 +67,7 @@ def interpol(coor1, coor2, coor3, m, n):
     """
 
     # Check if no third coordinate is present
-    if not coor3:
+    if not list(coor3):
         if m != 1 and n != 1:
             raise ValueError('Third corner coordinate not given despite\
                 configuration being a grid.')
@@ -208,8 +208,8 @@ def interpol_strip(coor1, coor2, m, n):
     elec_coor.append(totuple(new_corr))
     count = 1
     names.append("GRID %d" % count)
-    for i in range(n):
-        new_corr = np.add(A, (mag_A2B / (n - 1)) * (i + 1) * (unit_A2B))
+    for i in range(m):
+        new_corr = np.add(A, (mag_A2B / (m - 1)) * (i + 1) * (unit_A2B))
         elec_coor.append(totuple(new_corr))
         count += 1
         names.append("GRID %d" % count)

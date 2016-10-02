@@ -222,9 +222,9 @@ class CT(object):
     def contains_grid(self, grid_label):
         return grid_label in self.grids
 
-    def add_selection_to_grid(self, grid_label, electrode_label, grid_coordinate, radius=4):
+    def add_selection_to_grid(self, grid_label, electrode_label, grid_coordinate, grid_type='G', radius=4):
         cloud = PointCloud(grid_label, self.selected_points.coordinates)
-        electrode = Electrode(cloud, electrode_label, radius, grid_coordinate=grid_coordinate, radius=radius)
+        electrode = Electrode(cloud, electrode_label, radius, grid_coordinate=grid_coordinate, grid_type, radius=radius)
         self.grids[grid_label].add_electrode(electrode, grid_coordinate)
 
     def create_electrode_from_selection(self, electrode_label, radius):
@@ -270,4 +270,5 @@ class CT(object):
                     grid_coordinate = np.unravel_index([ii], d)
                     grid_coordinate = tuple(map(lambda x: int(x) + 1, grid_coordinate))
                     self.select_points_near(point, nearby_range=1)
-                    self.add_selection_to_grid(grid_label, str(ii + int(start)), grid_coordinate, radius=4)
+                    self.add_selection_to_grid(grid_label, str(ii + int(start)), grid_coordinate, grid_type='S',
+                                               radius=4)
