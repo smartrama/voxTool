@@ -96,15 +96,20 @@ class PyLocControl(object):
         grid_label = self.get_grid_label()
         electrode_label = self.get_electrode_label()
         grid_coordinates = self.get_grid_coordinates()
+        grid_dimensions = self.get_grid_dimensions()
         if not self.ct.contains_grid(grid_label):
-            grid_dimensions = self.get_grid_dimensions()
             self.add_grid(Grid(grid_label, dimensions=grid_dimensions))
         electrode = self.ct.create_electrode_from_selection(electrode_label, 10)
         self.add_electrode(electrode, grid_label, grid_coordinates)
         self.view.submission_layout.contact_edit.setText(str(int(electrode_label) + 1))
-        self.view.submission_layout.coordinates_y_edit.setText(
-            str(grid_coordinates[1] + 1)
-        )
+        if grid_dimensions[1] == 1:
+            self.view.submission_layout.coordinates_x_edit.setText(
+                str(grid_coordinates[0] + 1)
+            )
+        else:
+            self.view.submission_layout.coordinates_y_edit.setText(
+                str(grid_coordinates[1] + 1)
+            )
 
     def key_pressed(self, e):
         self.add_selected_electrode()

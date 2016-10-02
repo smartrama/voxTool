@@ -224,7 +224,8 @@ class CT(object):
 
     def add_selection_to_grid(self, grid_label, electrode_label, grid_coordinate, grid_type='G', radius=4):
         cloud = PointCloud(grid_label, self.selected_points.coordinates)
-        electrode = Electrode(cloud, electrode_label, radius, grid_coordinate=grid_coordinate, grid_type, radius=radius)
+        electrode = Electrode(cloud, electrode_label, radius,
+                              grid_coordinate=grid_coordinate, type=grid_type, radius=radius)
         self.grids[grid_label].add_electrode(electrode, grid_coordinate)
 
     def create_electrode_from_selection(self, electrode_label, radius):
