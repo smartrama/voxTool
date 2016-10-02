@@ -11,6 +11,12 @@ __credits__ = ["iped", "islamx", "lkini", "srdas",
                "jmstein", "kadavis"]
 __status__ = "Development"
 
+import math
+
+import numpy as np
+import numpy.linalg
+import numpy.matlib
+
 
 def normalize(v):
     """ returns the unit vector in the direction of v
@@ -75,11 +81,6 @@ def interpol(coor1, coor2, coor3, m, n):
             raise ValueError('Third corner coordinate given despite\
                 configuration being a strip.')
         return interpol_grid(coor1, coor2, coor3, m, n)
-
-
-import math
-
-import numpy as np
 
 
 def rotation_matrix(axis, theta):
@@ -247,6 +248,126 @@ def interpol_grid(coor1, coor2, coor3, m, n):
     elec_coor = elec_coor[0:-1]
     # pairs = dict(zip(names, elec_coor))
     return elec_coor
+
+
+def interpol_grid_to_mask(coor1, coor2, coor3, m, n, mask):
+    """ returns the coordinates of all interpolated electrodes in a
+        grid of configuration m x n along with numeric labels in
+        order.
+
+    This is the worker function of interpol(...).
+
+    @param coor1 : Coordinate corresponding to label 1
+    @param coor2 : Coordinate corresponding to the first electrode in
+        the last row
+    @param coor3 : Coordinate corresponding to the last electrode
+        (optional in case of strip)
+    @param m : Number of rows
+    @param n : Number of columns
+    @type coor1: list
+    @type coor2: list
+    @type coor3: list
+    @type m: int
+    @type n: int
+    @rtype dict
+
+    Example:
+        >> interpol([77, 170, 81],[65, 106, 112],[104, 121, 158],8,8)
+    """
+    # Turn input coordinates (which are presumably lists)
+    # into numpy arrays.
+    coor1 = np.asarray(coor1)
+    coor2 = np.asarray(coor2)
+    coor3 = np.asarray(coor3)
+
+    # Figure out points A, B, and C of grid and respective vectors
+    # (A2B and B2C) that define grid.
+    vec1 = np.subtract(coor1, coor2)
+    vec2 = np.subtract(coor2, coor3)
+    vec3 = np.subtract(coor1, coor3)
+    mag_1 = np.linalg.norm(vec1)
+    mag_2 = np.linalg.norm(vec2)
+    mag_3 = np.linalg.norm(vec3)
+
+    # Reorient the vectors appropriately
+    if (mag_1 >= mag_2) and (mag_1 >= mag_3):
+        A = coor1
+        B = coor3
+        C = coor2
+        A2B = -1 * vec3
+        B2C = vec2
+    if (mag_2 >= mag_1) and (mag_2 >= mag_3):
+        A = coor2
+        B = coor1
+        C = coor3
+        A2B = vec1
+        B2C = -1 * vec3
+    if (mag_3 >= mag_1) and (mag_3 >= mag_2):
+        A = coor1
+        B = coor2
+        C = coor3
+        A2B = -1 * vec1
+        B2C = -1 * vec2
+
+    # Compute unit vectors
+    unit_A2B = normalize(A2B)
+    unit_B2C = normalize(B2C)
+    mag_A2B = np.linalg.norm(A2B)
+    mag_B2C = np.linalg.norm(B2C)
+
+    # Initialize outputs
+    elec_coor = []
+    new_corr = A
+    elec_coor.append(totuple(new_corr))
+    count = 1
+
+    # Use for loops to deduce locations of electrodes.
+    for j in range(n):
+        for i in range(m - 1):
+            new_corr = np.add(new_corr, (mag_A2B / (m - 1)) * (unit_A2B))
+            elec_coor.append(totuple(new_corr))
+            count += 1
+        new_corr = np.add(A, (mag_B2C / (n - 1)) * (j + 1) * (unit_B2C))
+        elec_coor.append(totuple(new_corr))
+        count += 1
+    elec_coor = elec_coor[0:-1]
+    warped_elec_coor = np.array(elec_coor)
+    new_warped_elec_coor = np.copy(warped_elec_coor)
+    mask_ind = np.array(np.where(mask))
+    step = 1
+    delta = 10000
+    iter_i = 1
+    while delta > 2:
+        for ii, coor in enumerate(warped_elec_coor):
+            dist = np.sqrt(np.square(coor[0] - mask_ind[0, :]) + np.square(coor[1] - mask_ind[1, :]) + np.square(
+                coor[2] - mask_ind[2, :]))
+            near_mask = mask_ind[:, dist < 20]
+
+            if not (dist < 1).any():
+                edist = np.sqrt(np.sum(np.square(coor - warped_elec_coor), axis=0))
+                neighbors = warped_elec_coor[edist < 10, :].T
+                cost = np.zeros(near_mask.shape[1], )
+                for neighbor in neighbors.T:
+                    cost += np.sum(np.square(np.array([neighbor]).T - near_mask), axis=0)
+                ind = np.argmax(cost)
+                v = near_mask[:, ind] - coor
+                v = v / numpy.linalg.norm(v, 2) * step
+                new_warped_elec_coor[ii] = coor + v
+            else:
+                new_warped_elec_coor[ii] = coor
+
+        delta = np.sum(np.sum(np.square(warped_elec_coor - new_warped_elec_coor)))
+        warped_elec_coor = np.copy(new_warped_elec_coor)
+
+        print delta
+        tmp = np.copy(mask)
+        for k in warped_elec_coor:
+            tmp[int(k[0]), int(k[1]), int(k[2])] = 2
+        nib.save(nib.Nifti1Image(tmp, np.eye(4)), '/Users/lkini/Documents/LittLab/Data/tmp/tmp_%i.nii.gz' % iter_i)
+        iter_i += 1
+
+
+
 
 
 def interpol_strip(coor1, coor2, m, n):
