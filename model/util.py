@@ -9,7 +9,7 @@ __version__ = '0.1'
 __author__ = 'Xavier Islam'
 __email__ = 'islamx@seas.upenn.edu'
 __copyright__ = "Copyright 2016, University of Pennsylvania"
-__credits__ = ["ipedi", "islamx", "lkini", "srdas",
+__credits__ = ["iped", "islamx", "lkini", "srdas",
                "jmstein", "kadavis"]
 __status__ = "Development"
 
@@ -67,16 +67,17 @@ def interpol(coor1, coor2, coor3, m, n):
     """
 
     # Check if no third coordinate is present
-    if coor3.any():
-        if m == 1 or n == 1:
-            raise ValueError('Third corner coordinate given despite\
-                configuration being a strip.')
-        return interpol_grid(coor1, coor2, coor3, m, n)
-    else:
+    if not coor3:
         if m != 1 and n != 1:
             raise ValueError('Third corner coordinate not given despite\
                 configuration being a grid.')
         return interpol_strip(coor1, coor2, m, n)
+    else:
+        if m == 1 or n == 1:
+            raise ValueError('Third corner coordinate given despite\
+                configuration being a strip.')
+        return interpol_grid(coor1, coor2, coor3, m, n)
+
 
 
 def interpol_grid(coor1, coor2, coor3, m, n):
