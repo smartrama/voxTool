@@ -2,13 +2,9 @@ import os
 
 os.environ['ETS_TOOLKIT'] = 'qt4'
 
-from pyface.qt import QtGui, QtCore
 from model.pointcloud import CT, Grid
-from mayavi.core.ui.api import MayaviScene, MlabSceneModel, \
-    SceneEditor
 
 import numpy as np
-from model.pointcloud import PointCloud
 from mayavi import mlab
 from traits.api import HasTraits, Instance, on_trait_change
 from traitsui.api import View, Item
@@ -61,11 +57,29 @@ class PyLocControl(object):
         self.view.update_cloud(cloud)
 
     def select_coordinate(self, coordinate):
-        centered_coordinate = self.ct.select_weighted_center(coordinate)
+        centered_coordinate = self.ct.select_weighted_center(coordinate, radius=1)
         self.view.update_cloud(self.ct.selected_points.label)
         if np.isnan(centered_coordinate).all():
             return
         self.view.update_slices(centered_coordinate)
+
+    def save_coord(self, f_handler):
+        f = open(f_handler, "w")
+
+        coord_txt = ''
+
+        for grid_label in self.ct.grids.keys():
+            for coord in sorted(self.ct.grids[grid_label].electrodes.keys(),
+                                key=lambda x: self.ct.grids[grid_label].electrodes[x].label):
+                c = self.ct.grids[grid_label].electrodes[coord].point_cloud.get_center()
+                electrode_label = self.ct.grids[grid_label].electrodes[coord].label
+                coord_txt += '{},{},{},{},{}\n'.format(grid_label, electrode_label, c[0], c[1], c[2])
+        f.write(coord_txt)
+        f.close()
+
+    def save_coord_csv(self):
+        f = QtGui.QFileDialog.getOpenFileName(None, 'Select Scan', '.', '(*.csv)')
+        self.save_coord(f)
 
     GRID_PRIORITY = 1
 
@@ -115,7 +129,14 @@ class PyLocControl(object):
         )
 
     def interpolate_main(self):
-        print self.ct.grids['RG']
+        # Interpolate over all grids/strips
+        self.ct.interpolate_all()
+        for grid_label in self.ct.grids.keys():
+            self.view.update_cloud(grid_label)
+        self.view.update_list(self.ct.grids.values())
+
+
+
 
 
 class PyLocView(QtGui.QWidget):
@@ -143,6 +164,7 @@ class PyLocView(QtGui.QWidget):
 
     def add_callbacks(self):
         self.task_bar.load_scan_button.clicked.connect(self.controller.choose_ct_scan)
+        self.task_bar.save_coord_button.clicked.connect(self.controller.save_coord_csv)
         self.submission_layout.submit_button.clicked.connect(self.controller.add_selected_electrode)
         self.submission_layout.interpolate_button.clicked.connect(self.controller.interpolate_main)
         self.task_bar.clean_button.clicked.connect(self.controller.clean_ct_scan)

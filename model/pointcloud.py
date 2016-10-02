@@ -4,6 +4,8 @@ import scipy.spatial.distance
 from scipy.ndimage.measurements import label
 from scipy.stats.mstats import mode
 
+import util
+
 __author__ = 'iped'
 
 
@@ -199,7 +201,11 @@ class CT(object):
         """
         vector_dist = self.all_points.coordinates - point
         dists = np.sqrt(np.sum(np.square(vector_dist), 1))
-        conn_comp_id, _ = mode(self.connected_points[dists < 1])  # ?? Change 1 to nearby_range
+
+        conn_comp_id, _ = mode(self.connected_points[dists < nearby_range])  # ?? Change 1 to nearby_range
+        while not (conn_comp_id[0]):
+            nearby_range += 1
+            conn_comp_id, _ = mode(self.connected_points[dists < nearby_range])  # ?? Change 1 to nearby_range
         self.select_points(self.all_points.coordinates[self.connected_points == conn_comp_id[0]])
         # self.select_points(self.all_points.get_points_in_range(point, nearby_range))
 
@@ -216,11 +222,52 @@ class CT(object):
     def contains_grid(self, grid_label):
         return grid_label in self.grids
 
-    def add_selection_to_grid(self, grid_label, electrode_label, radius=4):
+    def add_selection_to_grid(self, grid_label, electrode_label, grid_coordinate, radius=4):
         cloud = PointCloud(grid_label, self.selected_points.coordinates)
-        electrode = Electrode(cloud, electrode_label, radius)
-        self.grids[grid_label].add_electrode(electrode, (electrode_label,))
+        electrode = Electrode(cloud, electrode_label, radius, grid_coordinate=grid_coordinate, radius=radius)
+        self.grids[grid_label].add_electrode(electrode, grid_coordinate)
 
     def create_electrode_from_selection(self, electrode_label, radius):
         cloud = PointCloud(electrode_label, self.selected_points.coordinates)
         return Electrode(cloud, electrode_label, radius)
+
+    def interpolate_all(self):
+        for grid_label in self.grids.keys():
+            self.interpolate_grid(grid_label)
+
+    def interpolate_grid(self, grid_label):
+        d = self.grids[grid_label].dimensions
+
+        # Check if grid
+        if (d[1] > 1):
+            # Check to see all 4 corners present in grid
+            if all(x in self.grids[grid_label].electrodes.keys() for x in [(1, 1), (1, d[1]), (d[0], 1), (d[0], d[1])]):
+                # Interpolate
+                start = self.grids[grid_label].electrodes[(1, 1)].label
+                coor1 = self.grids[grid_label].electrodes[(1, 1)].point_cloud.get_center()
+                coor2 = self.grids[grid_label].electrodes[(1, d[1])].point_cloud.get_center()
+                coor3 = self.grids[grid_label].electrodes[(d[0], d[1])].point_cloud.get_center()
+
+                points = util.interpol(coor1, coor2, coor3, d[0], d[1])
+
+                # Select point (snap) to the closes point
+                for ii, point in enumerate(points):
+                    grid_coordinate = np.unravel_index([ii], d)
+                    grid_coordinate = tuple(map(lambda x: int(x) + 1, grid_coordinate))
+                    self.select_points_near(point, nearby_range=1)
+                    self.add_selection_to_grid(grid_label, str(ii + int(start)), grid_coordinate, radius=4)
+        else:
+            # Check to see all 4 corners present in grid
+            if all(x in self.grids[grid_label].electrodes.keys() for x in [(1, 1), (d[0], 1)]):
+                # Interpolate
+                start = self.grids[grid_label].electrodes[(1, 1)].label
+                coor1 = self.grids[grid_label].electrodes[(1, 1)].point_cloud.get_center()
+                coor2 = self.grids[grid_label].electrodes[(d[0], 1)].point_cloud.get_center()
+                points = util.interpol(coor1, coor2, [], d[0], 1)
+
+                # Select point (snap) to the closes point
+                for ii, point in enumerate(points):
+                    grid_coordinate = np.unravel_index([ii], d)
+                    grid_coordinate = tuple(map(lambda x: int(x) + 1, grid_coordinate))
+                    self.select_points_near(point, nearby_range=1)
+                    self.add_selection_to_grid(grid_label, str(ii + int(start)), grid_coordinate, radius=4)
