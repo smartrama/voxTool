@@ -13,6 +13,7 @@ __status__ = "Development"
 
 import math
 
+import nibabel as nib
 import numpy as np
 import numpy.linalg
 import numpy.matlib
@@ -332,23 +333,28 @@ def interpol_grid_to_mask(coor1, coor2, coor3, m, n, mask):
         count += 1
     elec_coor = elec_coor[0:-1]
     warped_elec_coor = np.array(elec_coor)
+
+    # initialize minimization parameters
     new_warped_elec_coor = np.copy(warped_elec_coor)
     mask_ind = np.array(np.where(mask))
     step = 1
     delta = 10000
     iter_i = 1
-    while delta > 2:
+    end_delta = 2
+
+    while delta > end_delta:
         for ii, coor in enumerate(warped_elec_coor):
             dist = np.sqrt(np.square(coor[0] - mask_ind[0, :]) + np.square(coor[1] - mask_ind[1, :]) + np.square(
                 coor[2] - mask_ind[2, :]))
             near_mask = mask_ind[:, dist < 20]
 
             if not (dist < 1).any():
-                edist = np.sqrt(np.sum(np.square(coor - warped_elec_coor), axis=0))
+                edist = np.sqrt(np.sum(np.square(coor - warped_elec_coor), axis=1))
                 neighbors = warped_elec_coor[edist < 10, :].T
                 cost = np.zeros(near_mask.shape[1], )
                 for neighbor in neighbors.T:
                     cost += np.sum(np.square(np.array([neighbor]).T - near_mask), axis=0)
+
                 ind = np.argmax(cost)
                 v = near_mask[:, ind] - coor
                 v = v / numpy.linalg.norm(v, 2) * step
@@ -363,7 +369,8 @@ def interpol_grid_to_mask(coor1, coor2, coor3, m, n, mask):
         tmp = np.copy(mask)
         for k in warped_elec_coor:
             tmp[int(k[0]), int(k[1]), int(k[2])] = 2
-        nib.save(nib.Nifti1Image(tmp, np.eye(4)), '/Users/lkini/Documents/LittLab/Data/tmp/tmp_%i.nii.gz' % iter_i)
+        if np.mod(iter_i, 5) == 0:
+            nib.save(nib.Nifti1Image(tmp, np.eye(4)), '/Users/lkini/Documents/LittLab/Data/tmp/tmp_%i.nii.gz' % iter_i)
         iter_i += 1
 
 
