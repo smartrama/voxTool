@@ -18,6 +18,10 @@ import numpy as np
 import numpy.linalg
 import numpy.matlib
 
+import scipy.ndimage.measurements
+import scipy.ndimage.morphology
+import scipy.spatial
+
 
 def normalize(v):
     """ returns the unit vector in the direction of v
@@ -424,3 +428,29 @@ def interpol_strip(coor1, coor2, m, n):
     elec_coor = elec_coor[0:-1]
     # pairs = dict(zip(names, elec_coor))
     return elec_coor
+
+
+def get_mask_surface(mask):
+    '''
+
+    :param mask:
+    :return:
+    '''
+
+    # isinstance(mask,(np.ndarray))
+    mask_dilated = scipy.ndimage.morphology.binary_dilation(mask)
+    surface = mask_dilated-mask
+    surface = np.array(np.where(surface)).T
+    surface_cKDTree = scipy.spatial.cKDTree(surface)
+    return surface, surface_cKDTree
+
+def unique_rows(a):
+    '''
+    Finds unique rows in a ndarray. Credit: http://stackoverflow.com/questions/8560440/removing-duplicate-columns-and-rows-from-a-numpy-2d-array/8567929#8567929
+
+    :param a:
+    :return:
+    '''
+    a = np.ascontiguousarray(a)
+    unique_a = np.unique(a.view([('', a.dtype)]*a.shape[1]))
+    return unique_a.view(a.dtype).reshape((unique_a.shape[0], a.shape[1]))

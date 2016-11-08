@@ -99,11 +99,10 @@ class PointCloud(object):
 
 
 class Electrode(object):
-    def __init__(self, point_cloud, electrode_label, electrode_number, grid_coordinate=(0, 0), type='G', radius=4):
+    def __init__(self, point_cloud, electrode_label, electrode_number, grid_coordinate=(0, 0), radius=4):
         self.label = electrode_label
         self.point_cloud = point_cloud
         self.number = electrode_number
-        self.type = type
         self.radius = radius
         self.grid_coordinate = grid_coordinate
         # self.bounds = self.calculate_bounds()
@@ -125,10 +124,11 @@ class Electrode(object):
 
 
 class Grid(object):
-    def __init__(self, grid_label, dimensions=(1, 4), spacing=10):
+    def __init__(self, grid_label, type='G', dimensions=(1, 4), spacing=10):
         self.label = grid_label
         self.dimensions = dimensions
         self.electrodes = {}
+        self.type = type
         self.spacing = spacing
 
     def add_electrode(self, electrode, grid_coordinate):
@@ -161,7 +161,9 @@ class CT(object):
     def __init__(self, img_file):
         self.img_file = img_file
         img = nib.load(self.img_file)
-        self.data = img.get_data().squeeze()
+        img = np.fliplr(img.get_data())  # ?? CT image is flipped across sagittal for some reason
+        self.data = img.squeeze()
+        self.brainmask = np.zeros(nib.load(self.img_file).get_data().shape)
         mask = self.data >= max(np.percentile(self.data, self.THRESHOLD), 1)
         indices = np.array(mask.nonzero()).T
         connected_points, num_features = label(mask)
@@ -222,19 +224,27 @@ class CT(object):
     def contains_grid(self, grid_label):
         return grid_label in self.grids
 
-    def add_selection_to_grid(self, grid_label, electrode_label, grid_coordinate, grid_type='G', radius=4):
+    def add_selection_to_grid(self, grid_label, electrode_label, grid_coordinate, radius=4):
         cloud = PointCloud(grid_label, self.selected_points.coordinates)
         electrode = Electrode(cloud, electrode_label, radius,
-                              grid_coordinate=grid_coordinate, type=grid_type, radius=radius)
+                              grid_coordinate=grid_coordinate, radius=radius)
         self.grids[grid_label].add_electrode(electrode, grid_coordinate)
 
     def create_electrode_from_selection(self, electrode_label, radius):
         cloud = PointCloud(electrode_label, self.selected_points.coordinates)
         return Electrode(cloud, electrode_label, radius)
 
+    def add_mask(self, filename):
+        mask = nib.load(filename).get_data()
+        mask = np.fliplr(mask)
+        self.brainmask = mask
+
     def interpolate_all(self):
         for grid_label in self.grids.keys():
-            self.interpolate(grid_label)
+            # Check if all points already added (manually or interpolated before)
+            d = self.grids[grid_label].dimensions
+            if not len(self.grids[grid_label].electrodes.keys()) == d[0] * d[1]:
+                self.interpolate(grid_label)
 
     def interpolate(self, grid_label):
         """
@@ -256,7 +266,7 @@ class CT(object):
                 coor2 = self.grids[grid_label].electrodes[(1, d[1])].point_cloud.get_center()
                 coor3 = self.grids[grid_label].electrodes[(d[0], d[1])].point_cloud.get_center()
 
-                points = util.interpol(coor1, coor2, coor3, d[0], d[1])
+                points = util.interpol(coor1, coor2, coor3, d[1], d[0])
 
                 # Select point (snap) to the closes point
                 for ii, point in enumerate(points):
@@ -265,7 +275,7 @@ class CT(object):
                     self.select_points_near(point, nearby_range=1)
                     self.add_selection_to_grid(grid_label, str(ii + int(start)), grid_coordinate, radius=4)
         else:
-            # Check to see all 4 corners present in grid
+            # Check to see both ends present in strip/depth
             if all(x in self.grids[grid_label].electrodes.keys() for x in [(1, 1), (d[0], 1)]):
                 # Interpolate
                 start = self.grids[grid_label].electrodes[(1, 1)].label
@@ -278,5 +288,5 @@ class CT(object):
                     grid_coordinate = np.unravel_index([ii], d)
                     grid_coordinate = tuple(map(lambda x: int(x) + 1, grid_coordinate))
                     self.select_points_near(point, nearby_range=1)
-                    self.add_selection_to_grid(grid_label, str(ii + int(start)), grid_coordinate, grid_type='S',
+                    self.add_selection_to_grid(grid_label, str(ii + int(start)), grid_coordinate,
                                                radius=4)

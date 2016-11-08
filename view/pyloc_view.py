@@ -4,7 +4,7 @@ os.environ['ETS_TOOLKIT'] = 'qt4'
 
 from model.pointcloud import CT, Grid
 
-import numpy as np
+import numpy as np, nibabel as nib
 from mayavi import mlab
 from traits.api import HasTraits, Instance, on_trait_change
 from traitsui.api import View, Item
@@ -42,12 +42,20 @@ class PyLocControl(object):
         if file:
             self.load_ct_scan(file)
 
+    def choose_mask_scan(self):
+        file = QtGui.QFileDialog.getOpenFileName(None, 'Select Mask', '.', '(*.img; *.nii.gz)')
+        if file:
+            self.load_mask_scan(file)
+
     def load_ct_scan(self, filename):
         self.ct = CT(filename)
         self.view.clear()
         self.view.add_cloud(self.ct.all_points, callback=self.select_coordinate)
         self.view.add_cloud(self.ct.selected_points)
         self.view.set_slice_image(self.ct.data)
+
+    def load_mask_scan(self, filename):
+        self.mask = self.ct.add_mask(filename)
 
     def clean_ct_scan(self):
         self.ct.remove_isolated_points()
@@ -69,11 +77,17 @@ class PyLocControl(object):
         coord_txt = ''
 
         for grid_label in self.ct.grids.keys():
+            grid_type = self.grids[grid_label].type
+            grid_dim = self.grids[grid_label].dimensions
             for coord in sorted(self.ct.grids[grid_label].electrodes.keys(),
                                 key=lambda x: self.ct.grids[grid_label].electrodes[x].label):
+                d = nib.load(self.ct.img_file).get_data().shape
                 c = self.ct.grids[grid_label].electrodes[coord].point_cloud.get_center()
                 electrode_label = self.ct.grids[grid_label].electrodes[coord].label
-                coord_txt += '{},{},{},{},{}\n'.format(grid_label, electrode_label, c[0], c[1], c[2])
+
+                # Save coordinate but remember to flip across sagittal plane (because of weird CT mirror issue)
+                coord_txt += '{},{},{},{},{},{},{},{}\n'.format(electrode_label, c[0], d[1] - c[1], c[2], grid_label,
+                                                                grid_type, grid_dim[0], grid_dim[1])
         f.write(coord_txt)
         f.close()
 
@@ -94,11 +108,12 @@ class PyLocControl(object):
 
     def add_selected_electrode(self):
         grid_label = self.get_grid_label()
+        grid_type = self.get_grid_type()
         electrode_label = self.get_electrode_label()
         grid_coordinates = self.get_grid_coordinates()
         grid_dimensions = self.get_grid_dimensions()
         if not self.ct.contains_grid(grid_label):
-            self.add_grid(Grid(grid_label, dimensions=grid_dimensions))
+            self.add_grid(Grid(grid_label, type=grid_type, dimensions=grid_dimensions))
         electrode = self.ct.create_electrode_from_selection(electrode_label, 10)
         self.add_electrode(electrode, grid_label, grid_coordinates)
         self.view.submission_layout.contact_edit.setText(str(int(electrode_label) + 1))
@@ -116,6 +131,9 @@ class PyLocControl(object):
 
     def get_grid_label(self):
         return str(self.view.submission_layout.lead_edit.text())
+
+    def get_grid_type(self):
+        return str(self.view.submission_layout.type_edit.text())
 
     def get_electrode_label(self):
         return str(self.view.submission_layout.contact_edit.text())
@@ -139,9 +157,6 @@ class PyLocControl(object):
         for grid_label in self.ct.grids.keys():
             self.view.update_cloud(grid_label)
         self.view.update_list(self.ct.grids.values())
-
-
-
 
 
 class PyLocView(QtGui.QWidget):
@@ -169,6 +184,7 @@ class PyLocView(QtGui.QWidget):
 
     def add_callbacks(self):
         self.task_bar.load_scan_button.clicked.connect(self.controller.choose_ct_scan)
+        self.task_bar.load_mask_button.clicked.connect(self.controller.choose_mask_scan)
         self.task_bar.save_coord_button.clicked.connect(self.controller.save_coord_csv)
         self.submission_layout.submit_button.clicked.connect(self.controller.add_selected_electrode)
         self.submission_layout.interpolate_button.clicked.connect(self.controller.interpolate_main)
@@ -189,7 +205,7 @@ class PyLocView(QtGui.QWidget):
         for grid in sorted(grids, key=lambda grid: grid.label):
             for coordinates, lead in sorted(grid.electrodes.items()):
                 self.submission_layout.list_widget.addItem(
-                    '{}{} {} ({},{})'.format(grid.label, lead.label, lead.type, *coordinates)
+                    '{}{} {} ({},{})'.format(grid.label, lead.label, grid.type, *coordinates)
                 )
 
     def add_cloud(self, cloud, priority=0, callback=None):
@@ -231,7 +247,13 @@ class ElectrodeSubmissionLayout(QtGui.QFrame):
         self.dimensions_y_edit.setMaximumWidth(30)
         dimensions_layout.addWidget(self.dimensions_y_edit)
         dimensions_layout.addWidget(QtGui.QLabel(")"))
+
         lead_layout.addLayout(dimensions_layout)
+
+        type_layout = QtGui.QHBoxLayout()
+        self.type_edit = QtGui.QLineEdit()
+        lead_layout.addWidget(self.type_edit)
+        lead_layout.addLayout(type_layout)
 
         top_layout.addLayout(lead_layout)
 
@@ -282,10 +304,12 @@ class TaskBarLayout(QtGui.QHBoxLayout):
     def __init__(self, parent=None):
         super(TaskBarLayout, self).__init__(parent)
         self.load_scan_button = QtGui.QPushButton("Load Scan")
+        self.load_mask_button = QtGui.QPushButton("Load Mask")
         self.load_coord_button = QtGui.QPushButton("Load Coordinates")
         self.save_coord_button = QtGui.QPushButton("Save Coordinates")
         self.clean_button = QtGui.QPushButton("Clean scan")
         self.addWidget(self.load_scan_button)
+        self.addWidget(self.load_mask_button)
         self.addWidget(self.load_coord_button)
         self.addWidget(self.save_coord_button)
         self.addWidget(self.clean_button)
