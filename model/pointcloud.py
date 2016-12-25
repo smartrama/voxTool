@@ -6,13 +6,6 @@ __author__ = 'iped'
 
 class PointCloud(object):
 
-    TYPES = lambda: None
-    TYPES.CT = 1
-    TYPES.PROPOSED_ELECTRODE = 2
-    TYPES.MISSING_ELECTRODE = 3
-    TYPES.CONFIRMED_ELECTRODE = 4
-    TYPES.SELECTED = 5
-
     def __init__(self, label, coordinates):
         self.coordinates, self.label =\
             coordinates, label
@@ -95,14 +88,14 @@ class PointCloud(object):
 
 class Electrode(object):
 
-    def __init__(self, point_cloud, electrode_label, electrode_number, grid_coordinate = (0,0), type='G', radius=4):
-        self.label = electrode_label
+    def __init__(self, point_cloud, lead_label, contact_number, grid_location,
+                 electrode_type='S', radius=4):
+        self.label = lead_label
         self.point_cloud = point_cloud
-        self.number = electrode_number
-        self.type = type
+        self.number = contact_number
+        self.type = electrode_type
         self.radius = radius
-        self.grid_coordinate = grid_coordinate
-        #self.bounds = self.calculate_bounds()
+        self.grid_location = grid_location
 
     @property
     def xyz(self):
@@ -201,11 +194,19 @@ class CT(object):
     def contains_grid(self, grid_label):
         return grid_label in self.grids
 
-    def add_selection_to_grid(self, grid_label, electrode_label, radius=4):
-        cloud = PointCloud(grid_label, self.selected_points.coordinates)
-        electrode = Electrode(cloud, electrode_label, radius)
-        self.grids[grid_label].add_electrode(electrode, (electrode_label,))
+    def add_selection_to_lead(self, lead_label, contact_label, radius=4):
+        cloud = PointCloud(lead_label, self.selected_points.coordinates)
+        electrode = Electrode(cloud, contact_label, radius, )
+        self.grids[lead_label].add_electrode(electrode, contact_label)
 
-    def create_electrode_from_selection(self, electrode_label, radius):
-        cloud = PointCloud(electrode_label, self.selected_points.coordinates)
-        return Electrode(cloud, electrode_label, radius)
+    def create_electrode_from_selection(self, contact_label, radius, grid_location):
+        cloud = PointCloud(contact_label, self.selected_points.coordinates)
+        return Electrode(cloud, contact_label, radius, grid_location)
+
+    def add_electrode_at_coordinates(self, coordinate, lead_label, contact_label,
+                                     grid_location, radius=4, electrode_type='S'):
+        points = self.all_points.get_points_in_range(coordinate, radius)
+        cloud = PointCloud(lead_label, points)
+        electrode = Electrode(cloud, lead_label, contact_label, electrode_type, grid_location,
+                             radius, electrode_type)
+        self.grids[lead_label].add_electrode(electrode, contact_label)

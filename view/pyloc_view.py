@@ -84,7 +84,7 @@ class PyLocControl(object):
         grid_coordinates = self.get_grid_coordinates()
         if not self.ct.contains_grid(grid_label):
             self.add_grid(Grid(grid_label))
-        electrode = self.ct.create_electrode_from_selection(electrode_label, 10)
+        electrode = self.ct.create_electrode_from_selection(electrode_label, 10, grid_coordinates)
         self.add_electrode(electrode, grid_label, grid_coordinates)
         self.view.submission_layout.contact_edit.setText(str(int(electrode_label) + 1))
         self.view.submission_layout.coordinates_y_edit.setText(
