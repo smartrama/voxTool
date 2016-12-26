@@ -1,6 +1,6 @@
 ## voxTool Synopsis
 
-This forked repo from iped's voxTool attempts to integrate a mix of linear interpolation and energy-minimization to semiautomatically localize groups of electrodes in grid, strip, or depth electrodes. This reduces workload on user to manually label all electrodes individually.
+This forked repo from iped's voxTool attempts to use linear interpolation to semiautomatically localize groups of electrodes in grid, strip, or depth electrodes. This reduces workload on user to manually label all electrodes individually.
 
 ## Code Example
 
