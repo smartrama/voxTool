@@ -77,8 +77,8 @@ class PyLocControl(object):
         coord_txt = ''
 
         for grid_label in self.ct.grids.keys():
-            grid_type = self.grids[grid_label].type
-            grid_dim = self.grids[grid_label].dimensions
+            grid_type = self.ct.grids[grid_label].type
+            grid_dim = self.ct.grids[grid_label].dimensions
             for coord in sorted(self.ct.grids[grid_label].electrodes.keys(),
                                 key=lambda x: self.ct.grids[grid_label].electrodes[x].label):
                 d = nib.load(self.ct.img_file).get_data().shape

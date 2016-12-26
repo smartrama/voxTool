@@ -446,7 +446,8 @@ def get_mask_surface(mask):
 
 def unique_rows(a):
     '''
-    Finds unique rows in a ndarray. Credit: http://stackoverflow.com/questions/8560440/removing-duplicate-columns-and-rows-from-a-numpy-2d-array/8567929#8567929
+    Finds unique rows in a ndarray.
+    Credit: http://stackoverflow.com/questions/8560440/removing-duplicate-columns-and-rows-from-a-numpy-2d-array/8567929#8567929
 
     :param a:
     :return:
