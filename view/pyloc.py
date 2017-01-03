@@ -1,4 +1,5 @@
 import os
+
 os.environ['ETS_TOOLKIT'] = 'qt4'
 
 from pyface.qt import QtGui
@@ -23,7 +24,6 @@ log.setLevel(0)
 
 
 class PylocControl(object):
-
     def __init__(self, config=None):
 
         if config == None:
@@ -156,11 +156,10 @@ class PylocControl(object):
             offset = 0
 
         if lead_location[0] + offset > lead.dimensions[0] or \
-            lead_location[1] + offset > lead.dimensions[1]:
+                                lead_location[1] + offset > lead.dimensions[1]:
             if not self.confirm("Dimensions {} are outside of lead dimensions {}. "
                                 "Are you sure you want to continue?".format(lead_location, lead.dimensions)):
                 return
-
 
         self.ct.add_selection_to_lead(lead_label, contact_label, lead_location, self.lead_group)
         self.view.contact_panel.set_chosen_leads(self.ct.get_leads())
@@ -232,17 +231,12 @@ class PylocControl(object):
                 self.contact_label = max_label.replace(str(num), str(new_num))
                 self.view.update_contact_label(self.contact_label)
 
-
-
-
-
     def set_leads(self, labels, lead_types, dimensions, radii, spacings):
         self.ct.set_leads(labels, lead_types, dimensions, radii, spacings)
         self.view.contact_panel.set_lead_labels(labels)
 
 
 class PylocWidget(QtGui.QWidget):
-
     def __init__(self, controller, config, parent=None):
         QtGui.QWidget.__init__(self, parent)
         self.controller = controller
@@ -288,8 +282,8 @@ class PylocWidget(QtGui.QWidget):
     def update_lead_location(self, x, y):
         self.contact_panel.set_lead_location(x, y)
 
-class ContactPanelWidget(QtGui.QWidget):
 
+class ContactPanelWidget(QtGui.QWidget):
     def __init__(self, controller, config, parent=None):
         super(ContactPanelWidget, self).__init__(parent)
         self.config = config
@@ -342,12 +336,15 @@ class ContactPanelWidget(QtGui.QWidget):
         self.contact_list = QtGui.QListWidget()
         layout.addWidget(self.contact_list)
 
+        self.autofill_button = QtGui.QPushButton("Auto-fill")
+        layout.addWidget(self.autofill_button)
+
         self.assign_callbacks()
 
     def display_coordinate(self, coordinate):
-        self.r_voxel.setText("%.1f"%coordinate[0])
-        self.a_voxel.setText("%.1f"%coordinate[1])
-        self.s_voxel.setText("%.1f"%coordinate[2])
+        self.r_voxel.setText("%.1f" % coordinate[0])
+        self.a_voxel.setText("%.1f" % coordinate[1])
+        self.s_voxel.setText("%.1f" % coordinate[2])
 
     def assign_callbacks(self):
         self.label_dropdown.currentIndexChanged.connect(self.lead_changed)
@@ -372,7 +369,7 @@ class ContactPanelWidget(QtGui.QWidget):
         group = self.find_digit(self.lead_group.text())
         self.lead_group.setText(group)
 
-        if len(x)>0 and len(y) > 0 and len(group) > 0:
+        if len(x) > 0 and len(y) > 0 and len(group) > 0:
             self.controller.set_lead_location([int(x), int(y)], int(group))
 
     @staticmethod
@@ -417,7 +414,6 @@ class ContactPanelWidget(QtGui.QWidget):
 
 
 class LeadDefinitionWidget(QtGui.QWidget):
-
     instance = None
 
     def __init__(self, controller, config, parent=None):
@@ -521,8 +517,8 @@ class LeadDefinitionWidget(QtGui.QWidget):
         sub_layout.addWidget(widget)
         layout.addLayout(sub_layout)
 
-class TaskBarLayout(QtGui.QHBoxLayout):
 
+class TaskBarLayout(QtGui.QHBoxLayout):
     def __init__(self, parent=None):
         super(TaskBarLayout, self).__init__(parent)
         self.load_scan_button = QtGui.QPushButton("Load Scan")
@@ -537,13 +533,13 @@ class TaskBarLayout(QtGui.QHBoxLayout):
         self.addWidget(self.save_coord_button)
         self.addWidget(self.clean_button)
 
-class CloudWidget(QtGui.QWidget):
 
+class CloudWidget(QtGui.QWidget):
     def __init__(self, controller, config, parent=None):
         super(CloudWidget, self).__init__(parent)
         self.config = config
         layout = QtGui.QVBoxLayout(self)
-        layout.setContentsMargins(0,0,0,0)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
         self.viewer = CloudViewer(config)
@@ -561,6 +557,7 @@ class CloudWidget(QtGui.QWidget):
 
     def remove_cloud(self, label):
         self.viewer.remove_cloud(label)
+
 
 class CloudViewer(HasTraits):
     BACKGROUND_COLOR = (.1, .1, .1)
@@ -605,13 +602,12 @@ class CloudViewer(HasTraits):
                 found = True
         return found
 
-
     view = View(Item('scene', editor=SceneEditor(scene_class=MayaviScene),
                      height=250, width=300, show_label=False),
                 resizable=True)
 
-class CloudView(object):
 
+class CloudView(object):
     def get_colormap(self, label):
         if label == '_ct':
             return self.config['colormaps']['ct']
@@ -625,7 +621,7 @@ class CloudView(object):
         self.config = config
         self.label = label
         self.colormap = self.get_colormap(label)
-        self._callback = callback if callback else lambda *_:None
+        self._callback = callback if callback else lambda *_: None
         self._plot = None
         self._glyph_points = None
 
@@ -653,7 +649,7 @@ class CloudView(object):
         return colors
 
     def contains(self, picker):
-        return True if self._plot else False #and picker.pick_position in self.ct.xyz(self.label)
+        return True if self._plot else False  # and picker.pick_position in self.ct.xyz(self.label)
 
     def plot(self):
         labels, x, y, z = self.ct.xyz(self.label)
@@ -674,21 +670,14 @@ class CloudView(object):
             x=x, y=y, z=z, scalars=self.get_colors(labels, x, y, z))
 
 
-
-
-
-
-
 if __name__ == '__main__':
     controller = PylocControl(yaml.load(open("../model/config.yml")))
-    #controller = PyLocControl('/Users/iped/PycharmProjects/voxTool/R1170J_CT_combined.nii.gz')
+    # controller = PyLocControl('/Users/iped/PycharmProjects/voxTool/R1170J_CT_combined.nii.gz')
     controller.load_ct("../sandbox/R1001P_CT_combined.img")
     controller.set_leads(
-        ["st", "de", "gr"], ["S", "D", "G"], [[8,1],[8,1],[4,4]], [5, 10, 10], [10, 20, 20]
+        ["st", "de", "gr"], ["S", "D", "G"], [[8, 1], [8, 1], [4, 4]], [5, 10, 10], [10, 20, 20]
     )
     controller.exec_()
-
-
 
 if __name__ == 'x__main__':
     app = QtGui.QApplication.instance()

@@ -4,13 +4,15 @@ import scipy.spatial.distance
 from collections import OrderedDict
 import logging
 import json
+
 log = logging.getLogger()
+
 
 class PylocModelException(Exception):
     pass
 
-class Scan(object):
 
+class Scan(object):
     def __init__(self):
         self.filename = None
         self.data = None
@@ -21,8 +23,8 @@ class Scan(object):
         img = nib.load(self.filename)
         self.data = img.get_data().squeeze()
 
-class PointCloud(object):
 
+class PointCloud(object):
     def __init__(self, coordinates):
         self.coordinates = np.array(coordinates)
 
@@ -41,8 +43,8 @@ class PointCloud(object):
         else:
             return self.coordinates[mask]
 
-class PointMask(object):
 
+class PointMask(object):
     def __init__(self, label, point_cloud, mask=None):
         self.label = label
         self.point_cloud = point_cloud
@@ -86,9 +88,9 @@ class PointMask(object):
         labels = []
         for mask in point_masks:
             mask_indices = np.where(mask.mask)[0]
-            new_indices= mask_indices[np.logical_not(np.in1d(mask_indices, indices, True))]
+            new_indices = mask_indices[np.logical_not(np.in1d(mask_indices, indices, True))]
             if len(new_indices) > 0:
-                new_coords = np.array([mask.point_cloud.get_coordinates()[i,:] for i in new_indices])
+                new_coords = np.array([mask.point_cloud.get_coordinates()[i, :] for i in new_indices])
                 coords = np.concatenate([coords, new_coords], 0)
                 labels.extend([mask.label for _ in new_indices])
                 indices = np.union1d(indices, new_indices)
@@ -96,9 +98,9 @@ class PointMask(object):
 
     def _calculate_bounds(self):
         if len(self.point_cloud) == 0 or not self.mask.any():
-            return np.array([[0,0,0],[0,0,0]])
+            return np.array([[0, 0, 0], [0, 0, 0]])
         coords = self.coordinates()
-        x, y, z = coords[:,0], coords[:,1], coords[:,2]
+        x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
         return np.array([[min(x), min(y), min(z)], [max(x), max(y), max(z)]])
 
     @property
@@ -120,8 +122,8 @@ class PointMask(object):
     def get_center(self):
         return np.mean(self.coordinates(), 0)
 
-class Contact(object):
 
+class Contact(object):
     def __init__(self, point_mask, contact_label,
                  lead_location, lead_group):
         self.point_mask = point_mask.copy()
@@ -147,10 +149,10 @@ class Contact(object):
     def lead_location_str(self):
         return '({}, {})'.format(*self.lead_location)
 
-class Lead(object):
 
+class Lead(object):
     def __init__(self, point_cloud, lead_label, lead_type='S',
-                 dimensions=(1,5), radius=4, spacing=10):
+                 dimensions=(1, 5), radius=4, spacing=10):
         self.point_cloud = point_cloud
         self.label = lead_label
         self.type_ = lead_type
@@ -187,8 +189,8 @@ class Lead(object):
             full_mask = np.logical_or(full_mask, mask.mask)
         return PointMask(self.label, self.point_cloud, full_mask)
 
-class CT(Scan):
 
+class CT(Scan):
     DEFAULT_THRESHOLD = 99.96
 
     def __init__(self, config):
@@ -208,7 +210,7 @@ class CT(Scan):
             for contact in lead.contacts.values():
                 groups.add(contact.lead_group)
                 contacts.append(dict(
-                    name=lead.label+contact.label,
+                    name=lead.label + contact.label,
                     lead_group=contact.lead_group,
                     lead_loc=contact.lead_location,
                     coordinate_spaces=dict(
@@ -244,7 +246,6 @@ class CT(Scan):
                 loc = contact['lead_loc']
                 contact_label = contact['name'].replace(lead_label, '')
                 self._leads[lead_label].add_contact(point_mask, contact_label, loc, group)
-
 
     def to_json(self, filename):
         json.dump(self.to_dict(), open(filename, 'w'))
@@ -320,19 +321,19 @@ class CT(Scan):
 
     def all_xyz(self):
         c = self._points.get_coordinates()
-        label = ['_ct'] * len(c[:,0])
-        return label, c[:,0], c[:,1], c[:,2],
+        label = ['_ct'] * len(c[:, 0])
+        return label, c[:, 0], c[:, 1], c[:, 2],
 
     def lead_xyz(self):
         coords, labels = PointMask.combined([lead.get_mask() for lead in self._leads.values()])
         if len(coords) == 0:
             return [], [], [], []
-        return labels, coords[:,0], coords[:,1], coords[:,2]
+        return labels, coords[:, 0], coords[:, 1], coords[:, 2]
 
     def selection_xyz(self):
         c = self._selection.coordinates()
-        label = ['_selected'] * len(c[:,0])
-        return label, c[:,0], c[:,1], c[:,2]
+        label = ['_selected'] * len(c[:, 0])
+        return label, c[:, 0], c[:, 1], c[:, 2]
 
     def xyz(self, label):
         if label == '_ct':
