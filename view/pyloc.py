@@ -2,7 +2,7 @@ import os
 
 os.environ['ETS_TOOLKIT'] = 'qt4'
 
-from pyface.qt import QtGui
+from pyface.qt import QtGui, QtCore
 from model.scan import CT
 from slice_viewer import SliceViewWidget
 from mayavi.core.ui.api import MayaviScene, MlabSceneModel, \
@@ -241,6 +241,11 @@ class PylocControl(object):
         self.view.contact_panel.set_lead_labels(labels)
 
 
+    def delete_contact(self, lead_label, contact_label):
+        self.ct.get_lead(lead_label).remove_contact(contact_label)
+        self.view.contact_panel.set_chosen_leads(self.ct.get_leads())
+        self.view.update_cloud('_leads')
+
 class PylocWidget(QtGui.QWidget):
     def __init__(self, controller, config, parent=None):
         QtGui.QWidget.__init__(self, parent)
@@ -338,6 +343,7 @@ class ContactPanelWidget(QtGui.QWidget):
         contact_label = QtGui.QLabel("Contacts:")
         layout.addWidget(contact_label)
 
+        self.contacts = []
         self.contact_list = QtGui.QListWidget()
         layout.addWidget(self.contact_list)
 
@@ -363,14 +369,22 @@ class ContactPanelWidget(QtGui.QWidget):
 
     LEAD_LOC_REGEX = r'\((\d+\.?\d*),\s?(\d+\.?\d*),\s?(\d+\.?\d*)\)'
 
+    def keyPressEvent(self, event):
+        super(ContactPanelWidget, self).keyPressEvent(event)
+        if event.key() == QtCore.Qt.Key_Delete:
+            current_index = self.contact_list.currentIndex()
+            try:
+                lead, contact = self.contacts[current_index.row()]
+                log.debug("Deleting contact {}{}".format(lead.label, contact.label))
+                self.controller.delete_contact(lead.label, contact.label)
+            except:
+                log.error("Could not delete contact")
+
     def chosen_lead_selected(self):
-        current_item = self.contact_list.currentItem()
-        current_text = current_item.text()
-        log.debug('{} selected'.format(current_text))
-        match = re.search(self.LEAD_LOC_REGEX, current_text)
-        if match is None:
-            log.error("Cannot determine lead location from {}".format(current_text))
-        self.controller.select_coordinate([float(x) for x in match.groups()], False)
+        current_index = self.contact_list.currentIndex()
+        _, current_contact = self.contacts[current_index.row()]
+        log.debug("Selecting contact {}".format(current_contact.label))
+        self.controller.select_coordinate(current_contact.center, False)
 
     def set_contact_label(self, label):
         self.contact_name.setText(label)
@@ -407,6 +421,7 @@ class ContactPanelWidget(QtGui.QWidget):
 
     def set_chosen_leads(self, leads):
         self.contact_list.clear()
+        self.contacts = []
         for lead_name in sorted(leads.keys()):
             lead = leads[lead_name]
             for contact_name in sorted(lead.contacts.keys(), key=lambda x:int(''.join(re.findall('\d+', x)))):
@@ -417,6 +432,7 @@ class ContactPanelWidget(QtGui.QWidget):
         self.contact_list.addItem(
             QtGui.QListWidgetItem(self.config['lead_display'].format(lead=lead, contact=contact).strip())
         )
+        self.contacts.append((lead, contact))
 
     def set_lead_labels(self, lead_labels):
         for lead_name in lead_labels:

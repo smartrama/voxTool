@@ -321,7 +321,6 @@ class Lead(object):
             self.add_contact(mask, new_label, grid_coordinate, contact_1.lead_group)
             log.info("Added contact {} at {}".format(new_label, point))
 
-
     def has_lead_location(self, lead_location, lead_group):
         for contact in self.contacts.values():
             if np.all(contact.lead_location == lead_location):
