@@ -15,20 +15,15 @@ import numpy as np
 
 class SliceViewWidget(QtGui.QWidget):
 
-    def __init__(self, parent=None, ct=None):
+    def __init__(self, parent=None, scan=None):
         QtGui.QWidget.__init__(self, parent)
-        data = ct.data if ct else None
+        data = scan.data if scan else None
         self.views = [
             SliceView(self, data, axis=0, subplot=311),
             SliceView(self, data, axis=1, subplot=312),
             SliceView(self, data, axis=2, subplot=313)
         ]
 
-        #self.uis = [
-        #    view.edit_traits(parent=self,
-        #                     kind='subpanel').control
-        #    for view in self.clouds
-        #]
         splitter = QtGui.QSplitter(QtCore.Qt.Vertical)
         for view in self.views:
             splitter.addWidget(view)
