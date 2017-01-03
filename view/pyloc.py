@@ -240,11 +240,11 @@ class PylocControl(object):
         self.ct.set_leads(labels, lead_types, dimensions, radii, spacings)
         self.view.contact_panel.set_lead_labels(labels)
 
-
     def delete_contact(self, lead_label, contact_label):
         self.ct.get_lead(lead_label).remove_contact(contact_label)
         self.view.contact_panel.set_chosen_leads(self.ct.get_leads())
         self.view.update_cloud('_leads')
+
 
 class PylocWidget(QtGui.QWidget):
     def __init__(self, controller, config, parent=None):
@@ -424,7 +424,7 @@ class ContactPanelWidget(QtGui.QWidget):
         self.contacts = []
         for lead_name in sorted(leads.keys()):
             lead = leads[lead_name]
-            for contact_name in sorted(lead.contacts.keys(), key=lambda x:int(''.join(re.findall('\d+', x)))):
+            for contact_name in sorted(lead.contacts.keys(), key=lambda x: int(''.join(re.findall('\d+', x)))):
                 contact = lead.contacts[contact_name]
                 self.add_contact(lead, contact)
 
@@ -687,7 +687,7 @@ class CloudView(object):
 
     def plot(self):
         labels, x, y, z = self.ct.xyz(self.label)
-        self._plot = mlab.points3d(x, y, z, #self.get_colors(labels, x, y, z),
+        self._plot = mlab.points3d(x, y, z,  # self.get_colors(labels, x, y, z),
                                    mode='cube', resolution=3,
                                    colormap=self.colormap,
                                    opacity=.5,
@@ -705,24 +705,23 @@ class CloudView(object):
             x=x, y=y, z=z, scalars=self.get_colors(labels, x, y, z))
 
 
-
 if __name__ == '__main__':
-    #controller = PylocControl(yaml.load(open(os.path.join(os.path.dirname(__file__) , "../config.yml"))))
+    # controller = PylocControl(yaml.load(open(os.path.join(os.path.dirname(__file__) , "../config.yml"))))
     # controller = PyLocControl('/Users/iped/PycharmProjects/voxTool/R1170J_CT_combined.nii.gz')
-    controller = PylocControl(yaml.load(open(os.path.join(os.path.dirname(__file__) , "../config.yml"))))
+    controller = PylocControl(yaml.load(open(os.path.join(os.path.dirname(__file__), "../config.yml"))))
 
-    #controller.load_ct("../T01_R1248P_CT.nii.gz")
+    # controller.load_ct("../T01_R1248P_CT.nii.gz")
     controller.load_ct('/Volumes/rhino_mount/data10/RAM/subjects/R1226D/tal/images/combined/R1226D_CT_combined.nii.gz')
     controller.set_leads(
-    #    ["sA", "sB", "dA", "dB"], ["S", "S", "D", "D"], ([[6, 1]] * 2) + ([[8, 1]] * 2), ([5] * 2) + ([5] * 2), [10] * 4
-        ["GG"], ["G"], ([[4, 8]]) , [5], [10]
-        #["dA", "dB", "dC"], ["D", "D", "G"], [[8, 1], [8, 1], [4, 4]], [5, 10, 10], [10, 20, 20]
+        #    ["sA", "sB", "dA", "dB"], ["S", "S", "D", "D"], ([[6, 1]] * 2) + ([[8, 1]] * 2), ([5] * 2) + ([5] * 2), [10] * 4
+        ["GG"], ["G"], ([[4, 8]]), [5], [10]
+        # ["dA", "dB", "dC"], ["D", "D", "G"], [[8, 1], [8, 1], [4, 4]], [5, 10, 10], [10, 20, 20]
     )
     controller.exec_()
 
 if __name__ == 'x__main__':
     app = QtGui.QApplication.instance()
-    x = LeadDefinitionWidget(None, yaml.load(open(os.path.join(os.path.dirname(__file__) , "../model/config.yml"))))
+    x = LeadDefinitionWidget(None, yaml.load(open(os.path.join(os.path.dirname(__file__), "../model/config.yml"))))
     x.show()
     window = QtGui.QMainWindow()
     window.setCentralWidget(x)

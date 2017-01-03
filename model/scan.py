@@ -23,7 +23,6 @@ class Scan(object):
         self.brainmask = None
 
 
-
 class PointCloud(object):
     def __init__(self, coordinates):
         self.coordinates = np.array(coordinates)
@@ -129,11 +128,10 @@ class PointMask(object):
             log.debug("Center attempt {}".format(attempts))
             vector_dist = coordinates - point
             dists = np.sqrt(np.sum(np.square(vector_dist), 1))
-            mean_dists = np.mean(vector_dist[dists < distance,:])
+            mean_dists = np.mean(vector_dist[dists < distance, :])
             point = np.mean(coordinates[dists < distance, :], 0)
             attempts += 1
         return PointMask('_proximity', point_cloud, dists < distance)
-
 
     def get_center(self):
         return np.mean(self.coordinates(), 0)
@@ -190,13 +188,12 @@ class Lead(object):
         dims = self.dimensions
         contacts = [contact for contact in self.contacts.values() if contact.lead_group == group]
         locations = [tuple(contact.lead_location) for contact in contacts]
-        possible_locations = [(i, j) for i in range(1, dims[0]+1) for j in range(1, dims[1] + 1)]
+        possible_locations = [(i, j) for i in range(1, dims[0] + 1) for j in range(1, dims[1] + 1)]
 
         present = np.zeros(len(possible_locations), bool).reshape(dims)
 
         for i, location in enumerate(possible_locations):
-            present[location[0]-1, location[1]-1] = location in locations
-
+            present[location[0] - 1, location[1] - 1] = location in locations
 
         if present.all():
             log.info("All leads present. Nothing to interpolate")
@@ -210,14 +207,14 @@ class Lead(object):
 
         for i in range(diffs.shape[0]):
             downs = np.where(diffs[i, :] == -1)[0]
-            downs_xy = [(i+1, down+1) for down in downs ]
+            downs_xy = [(i + 1, down + 1) for down in downs]
             ups = np.where(diffs[i, :] == 1)[0]
-            ups_xy = [(i+1, up+2) for up in ups]
+            ups_xy = [(i + 1, up + 2) for up in ups]
             holes.extend(zip(downs_xy, ups_xy))
 
         for down, up in holes:
-            c1 = [contact for contact, location in zip(contacts, locations) if location==down][0]
-            c2 = [contact for contact, location in zip(contacts, locations) if location==up][0]
+            c1 = [contact for contact, location in zip(contacts, locations) if location == down][0]
+            c2 = [contact for contact, location in zip(contacts, locations) if location == up][0]
             self._interpolate_between_1d(c1, c2, dims[0])
 
         diffs = np.diff(present.astype(int), axis=0)
@@ -228,21 +225,21 @@ class Lead(object):
 
         for i in range(diffs.shape[1]):
             downs = np.where(diffs[:, i] == -1)[0]
-            downs_xy = [(down+1, i+1) for down in downs]
+            downs_xy = [(down + 1, i + 1) for down in downs]
             ups = np.where(diffs[:, i] == 1)[0]
-            ups_xy = [(up+2, i+1) for up in ups]
+            ups_xy = [(up + 2, i + 1) for up in ups]
             holes.extend(zip(downs_xy, ups_xy))
 
         for down, up in holes:
-            c1 = [contact for contact, location in zip(contacts, locations) if location==down][0]
-            c2 = [contact for contact, location in zip(contacts, locations) if location==up][0]
+            c1 = [contact for contact, location in zip(contacts, locations) if location == down][0]
+            c2 = [contact for contact, location in zip(contacts, locations) if location == up][0]
             self._interpolate_between_1d(c1, c2, 1)
 
     def _interpolate_strip(self, group):
         dims = self.dimensions
         contacts = [contact for contact in self.contacts.values() if contact.lead_group == group]
         locations = [tuple(contact.lead_location) for contact in contacts]
-        possible_locations = [(i, 1) for i in range(1, dims[0]+1)]
+        possible_locations = [(i, 1) for i in range(1, dims[0] + 1)]
 
         present = np.array(list(x in locations for x in possible_locations))
 
@@ -254,16 +251,17 @@ class Lead(object):
 
         log.debug("Lead diffs = {}".format(diffs))
 
-        if not any(diffs==-1) or not any(diffs==1):
+        if not any(diffs == -1) or not any(diffs == 1):
             log.info("No holes present. Nothing to interpolate")
             return
 
-        downs = np.where(diffs==-1)[0]
-        ups = np.where(diffs==1)[0]
+        downs = np.where(diffs == -1)[0]
+        ups = np.where(diffs == 1)[0]
 
         for down, up in zip(downs, ups):
-            c1 = [contact for contact, location in zip(contacts, locations) if location==possible_locations[down]][0]
-            c2 = [contact for contact, location in zip(contacts, locations) if location==possible_locations[up+1]][0]
+            c1 = [contact for contact, location in zip(contacts, locations) if location == possible_locations[down]][0]
+            c2 = [contact for contact, location in zip(contacts, locations) if location == possible_locations[up + 1]][
+                0]
             self._interpolate_between_1d(c1, c2, 1)
 
     def _interpolate_between_1d(self, contact_1, contact_2, increment):
@@ -286,7 +284,6 @@ class Lead(object):
         else:
             log.error("Contacts are not alignable!")
             return
-
 
         n_points = contact_2.lead_location[dim] - contact_1.lead_location[dim] + 1
 
@@ -364,7 +361,6 @@ class CT(object):
         self.filename = None
         self.data = None
         self.brainmask = None
-
 
     def _load_scan(self, img_file):
         self.filename = img_file
