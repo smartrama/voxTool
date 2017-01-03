@@ -119,6 +119,22 @@ class PointMask(object):
         dists = np.sqrt(np.sum(np.square(vector_dist), 1))
         return PointMask('_proximity', point_cloud, dists < distance)
 
+    @staticmethod
+    def centered_proximity_mask(point_cloud, point, distance):
+        coordinates = point_cloud.get_coordinates()
+
+        mean_dists = 999
+        attempts = 0
+        while mean_dists > .5 and attempts < 10:
+            log.debug("Center attempt {}".format(attempts))
+            vector_dist = coordinates - point
+            dists = np.sqrt(np.sum(np.square(vector_dist), 1))
+            mean_dists = np.mean(vector_dist[dists < distance,:])
+            point = np.mean(coordinates[dists < distance, :], 0)
+            attempts += 1
+        return PointMask('_proximity', point_cloud, dists < distance)
+
+
     def get_center(self):
         return np.mean(self.coordinates(), 0)
 
@@ -173,71 +189,136 @@ class Lead(object):
     def _interpolate_grid(self, group):
         dims = self.dimensions
         contacts = [contact for contact in self.contacts.values() if contact.lead_group == group]
-        locations = [contact.lead_location for contact in contacts]
-        corners = [(1, 1), (1, dims[1]),
-                   (dims[0], 1), (dims[0], dims[1])]
-        if not all(x in locations for x in corners):
-            log.info("Not all corners present. Not interpolating")
+        locations = [tuple(contact.lead_location) for contact in contacts]
+        possible_locations = [(i, j) for i in range(1, dims[0]+1) for j in range(1, dims[1] + 1)]
+
+        present = np.zeros(len(possible_locations), bool).reshape(dims)
+
+        for i, location in enumerate(possible_locations):
+            present[location[0]-1, location[1]-1] = location in locations
+
+
+        if present.all():
+            log.info("All leads present. Nothing to interpolate")
             return
 
-        corner_contacts = [
-            [contact for contact in contacts if \
-             contact.lead_location[0] == corner[0] and contact.lead_location[1] == corner[1]][0]
-            for corner in corners
-        ]
+        diffs = np.diff(present.astype(int), axis=1)
 
-        corner_coordinates = [contact.center for contact in corner_contacts]
+        log.debug("Lead diffs 1 = {}".format(diffs))
 
-        points = interpolator.interpol(corner_coordinates[0], corner_coordinates[1], corner_coordinates[2],
-                                       dims[1], dims[0])
+        holes = []
 
-        start_label = corner_contacts[0].label
-        start_num = re.findall(r'\d+', start_label)[-1]
-        start_int = int(start_num)
+        for i in range(diffs.shape[0]):
+            downs = np.where(diffs[i, :] == -1)[0]
+            downs_xy = [(i+1, down+1) for down in downs ]
+            ups = np.where(diffs[i, :] == 1)[0]
+            ups_xy = [(i+1, up+2) for up in ups]
+            holes.extend(zip(downs_xy, ups_xy))
 
-        for i, point in enumerate(points):
-            grid_coordinate = np.unravel_index([i], dims)
-            grid_coordinate = tuple(map(lambda coordinate: int(coordinate) + 1, grid_coordinate))
-            mask = PointMask.proximity_mask(self.point_cloud, point, self.radius)
-            if not mask.mask.any():
-                log.info("Could not find any points near {}".format(points))
-                continue
-            new_label = start_label.replace(start_num, str(start_int + i))
-            self.add_contact(mask, new_label, grid_coordinate, group)
+        for down, up in holes:
+            c1 = [contact for contact, location in zip(contacts, locations) if location==down][0]
+            c2 = [contact for contact, location in zip(contacts, locations) if location==up][0]
+            self._interpolate_between_1d(c1, c2, dims[0])
+
+        diffs = np.diff(present.astype(int), axis=0)
+
+        log.debug("Lead diffs 0 = {}".format(diffs))
+
+        holes = []
+
+        for i in range(diffs.shape[1]):
+            downs = np.where(diffs[:, i] == -1)[0]
+            downs_xy = [(down+1, i+1) for down in downs]
+            ups = np.where(diffs[:, i] == 1)[0]
+            ups_xy = [(up+2, i+1) for up in ups]
+            holes.extend(zip(downs_xy, ups_xy))
+
+        for down, up in holes:
+            c1 = [contact for contact, location in zip(contacts, locations) if location==down][0]
+            c2 = [contact for contact, location in zip(contacts, locations) if location==up][0]
+            self._interpolate_between_1d(c1, c2, 1)
 
     def _interpolate_strip(self, group):
         dims = self.dimensions
         contacts = [contact for contact in self.contacts.values() if contact.lead_group == group]
         locations = [tuple(contact.lead_location) for contact in contacts]
-        corners = [(1, 1), (dims[0], 1)]
+        possible_locations = [(i, 1) for i in range(1, dims[0]+1)]
 
-        if not all(x in locations for x in corners):
-            log.info("Not all corners present. Not interpolating")
+        present = np.array(list(x in locations for x in possible_locations))
+
+        if all(present):
+            log.info("All leads present. Nothing to interpolate")
             return
 
-        corner_contacts = [
-            [contact for contact in contacts if \
-             contact.lead_location[0] == corner[0] and contact.lead_location[1] == corner[1]][0]
-            for corner in corners
-            ]
+        diffs = np.diff(present.astype(int))
 
-        corner_coordinates = [contact.center for contact in corner_contacts]
+        log.debug("Lead diffs = {}".format(diffs))
 
-        start_label = corner_contacts[0].label
-        start_num = re.findall(r'\d+', start_label)[-1]
+        if not any(diffs==-1) or not any(diffs==1):
+            log.info("No holes present. Nothing to interpolate")
+            return
+
+        downs = np.where(diffs==-1)[0]
+        ups = np.where(diffs==1)[0]
+
+        for down, up in zip(downs, ups):
+            c1 = [contact for contact, location in zip(contacts, locations) if location==possible_locations[down]][0]
+            c2 = [contact for contact, location in zip(contacts, locations) if location==possible_locations[up+1]][0]
+            self._interpolate_between_1d(c1, c2, 1)
+
+    def _interpolate_between_1d(self, contact_1, contact_2, increment):
+
+        log.debug("Interpolating between {} and {}".format(contact_1.label, contact_2.label))
+
+        start_label = contact_1.label
+        start_num = ''.join(re.findall(r'\d+', start_label))
         start_int = int(start_num)
 
-        points = interpolator.interpol(corner_coordinates[0], corner_coordinates[1], [], dims[0], 1)
+        start_coords = contact_1.center
+        end_coords = contact_2.center
+
+        if contact_2.lead_location[1] == contact_1.lead_location[1]:
+            dim = 0
+            loc = contact_2.lead_location[1]
+        elif contact_2.lead_location[0] == contact_1.lead_location[0]:
+            dim = 1
+            loc = contact_2.lead_location[0]
+        else:
+            log.error("Contacts are not alignable!")
+            return
+
+
+        n_points = contact_2.lead_location[dim] - contact_1.lead_location[dim] + 1
+
+        points = interpolator.interpol(start_coords, end_coords, [], n_points, 1)
+
+        centers = [start_coords, end_coords]
 
         for i, point in enumerate(points):
-            grid_coordinate = np.unravel_index([i], dims)
-            grid_coordinate = tuple(map(lambda coordinate: int(coordinate) + 1, grid_coordinate))
-            mask = PointMask.proximity_mask(self.point_cloud, point, self.radius)
+            if dim == 0:
+                grid_coordinate = [contact_1.lead_location[dim] + i, loc]
+            else:
+                grid_coordinate = [loc, contact_1.lead_location[dim] + i]
+            mask = PointMask.centered_proximity_mask(self.point_cloud, point, self.radius)
             if not mask.mask.any():
                 log.info("Could not find any points near {}".format(point))
                 continue
-            new_label = start_label.replace(start_num, str(start_int + i))
-            self.add_contact(mask, new_label, grid_coordinate, group)
+            center = mask.get_center()
+
+            new_label = start_label.replace(start_num, str(start_int + (i * increment)))
+
+            do_skip = False
+            for existing_center in centers:
+                if all(abs(existing_center - center) < .5):
+                    log.warning("Contact {} determined to have same center as previously defined contact."
+                                " Skipping".format(new_label))
+                    do_skip = True
+                    break
+            if do_skip:
+                continue
+            centers.append(center)
+
+            self.add_contact(mask, new_label, grid_coordinate, contact_1.lead_group)
             log.info("Added contact {} at {}".format(new_label, point))
 
 

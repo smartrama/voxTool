@@ -359,7 +359,18 @@ class ContactPanelWidget(QtGui.QWidget):
         self.y_lead_loc.textChanged.connect(self.lead_location_changed)
         self.lead_group.textChanged.connect(self.lead_location_changed)
         self.interpolate_button.clicked.connect(self.controller.interpolate_selected_lead)
+        self.contact_list.currentItemChanged.connect(self.chosen_lead_selected)
 
+    LEAD_LOC_REGEX = r'\((\d+\.?\d*),\s?(\d+\.?\d*),\s?(\d+\.?\d*)\)'
+
+    def chosen_lead_selected(self):
+        current_item = self.contact_list.currentItem()
+        current_text = current_item.text()
+        log.debug('{} selected'.format(current_text))
+        match = re.search(self.LEAD_LOC_REGEX, current_text)
+        if match is None:
+            log.error("Cannot determine lead location from {}".format(current_text))
+        self.controller.select_coordinate([float(x) for x in match.groups()], False)
 
     def set_contact_label(self, label):
         self.contact_name.setText(label)
@@ -398,7 +409,7 @@ class ContactPanelWidget(QtGui.QWidget):
         self.contact_list.clear()
         for lead_name in sorted(leads.keys()):
             lead = leads[lead_name]
-            for contact_name in sorted(lead.contacts.keys()):
+            for contact_name in sorted(lead.contacts.keys(), key=lambda x:int(''.join(re.findall('\d+', x)))):
                 contact = lead.contacts[contact_name]
                 self.add_contact(lead, contact)
 
@@ -660,29 +671,35 @@ class CloudView(object):
 
     def plot(self):
         labels, x, y, z = self.ct.xyz(self.label)
-        self._plot = mlab.points3d(x, y, z, self.get_colors(labels, x, y, z),
-                                   mask_points=10,
+        self._plot = mlab.points3d(x, y, z, #self.get_colors(labels, x, y, z),
                                    mode='cube', resolution=3,
                                    colormap=self.colormap,
+                                   opacity=.5,
                                    vmax=1, vmin=0,
                                    scale_mode='none', scale_factor=1)
+        self._plot.mlab_source.set(scalars=self.get_colors(labels, x, y, z))
 
     def unplot(self):
         self._plot.mlab_source.reset(x=[], y=[], z=[], scalars=[])
 
     def update(self):
-        log.debug("Updating cloud {}".format(self.label))
         labels, x, y, z = self.ct.xyz(self.label)
+        log.debug("Updating cloud {} with {} points".format(self.label, len(labels)))
         self._plot.mlab_source.reset(
             x=x, y=y, z=z, scalars=self.get_colors(labels, x, y, z))
 
 
+
 if __name__ == '__main__':
-    controller = PylocControl(yaml.load(open(os.path.join(os.path.dirname(__file__) , "../config.yml"))))
+    #controller = PylocControl(yaml.load(open(os.path.join(os.path.dirname(__file__) , "../config.yml"))))
     # controller = PyLocControl('/Users/iped/PycharmProjects/voxTool/R1170J_CT_combined.nii.gz')
-    controller.load_ct("../T01_R1248P_CT.nii.gz")
+    controller = PylocControl(yaml.load(open(os.path.join(os.path.dirname(__file__) , "../config.yml"))))
+
+    #controller.load_ct("../T01_R1248P_CT.nii.gz")
+    controller.load_ct('/Volumes/rhino_mount/data10/RAM/subjects/R1226D/tal/images/combined/R1226D_CT_combined.nii.gz')
     controller.set_leads(
-        ["dA", "dB", "dC", "dD"], ["D", "D", "D", "D"], [[8, 1]] * 4, [5] * 4, [10] * 4
+    #    ["sA", "sB", "dA", "dB"], ["S", "S", "D", "D"], ([[6, 1]] * 2) + ([[8, 1]] * 2), ([5] * 2) + ([5] * 2), [10] * 4
+        ["GG"], ["G"], ([[4, 8]]) , [5], [10]
         #["dA", "dB", "dC"], ["D", "D", "G"], [[8, 1], [8, 1], [4, 4]], [5, 10, 10], [10, 20, 20]
     )
     controller.exec_()

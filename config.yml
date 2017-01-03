@@ -3,19 +3,19 @@
 lead_types:
   D:
     name: Depth
-    radius: 5
+    radius: 3
     spacing: 10
     max_y: 1
   G:
     name: Grid
-    radius: 10
+    radius: 6
     spacing: 20
   S:
     name: Strip
-    radius: 10
+    radius: 6
     spacing: 20
 
-ct_threshold: 99.96
+ct_threshold: 99.9
 
 ct_max_color: 1
 ct_min_color: .3
