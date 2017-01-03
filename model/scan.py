@@ -1,9 +1,13 @@
 import nibabel as nib
 import numpy as np
 import scipy.spatial.distance
+from scipy.ndimage.measurements import label
+from scipy.stats.mstats import mode
 from collections import OrderedDict
 import logging
 import json
+import interpolator
+import re
 
 log = logging.getLogger()
 
@@ -16,12 +20,8 @@ class Scan(object):
     def __init__(self):
         self.filename = None
         self.data = None
+        self.brainmask = None
 
-    def _load_scan(self, img_file):
-        self.filename = img_file
-        log.debug("Loading {}".format(img_file))
-        img = nib.load(self.filename)
-        self.data = img.get_data().squeeze()
 
 
 class PointCloud(object):
@@ -161,6 +161,86 @@ class Lead(object):
         self.spacing = spacing
         self.contacts = OrderedDict()
 
+    def interpolate(self):
+        groups = set(contact.lead_group for contact in self.contacts.values())
+        if self.dimensions[1] > 1:
+            for group in groups:
+                self._interpolate_grid(group)
+        else:
+            for group in groups:
+                self._interpolate_strip(group)
+
+    def _interpolate_grid(self, group):
+        dims = self.dimensions
+        contacts = [contact for contact in self.contacts.values() if contact.lead_group == group]
+        locations = [contact.lead_location for contact in contacts]
+        corners = [(1, 1), (1, dims[1]),
+                   (dims[0], 1), (dims[0], dims[1])]
+        if not all(x in locations for x in corners):
+            log.info("Not all corners present. Not interpolating")
+            return
+
+        corner_contacts = [
+            [contact for contact in contacts if \
+             contact.lead_location[0] == corner[0] and contact.lead_location[1] == corner[1]][0]
+            for corner in corners
+        ]
+
+        corner_coordinates = [contact.center for contact in corner_contacts]
+
+        points = interpolator.interpol(corner_coordinates[0], corner_coordinates[1], corner_coordinates[2],
+                                       dims[1], dims[0])
+
+        start_label = corner_contacts[0].label
+        start_num = re.findall(r'\d+', start_label)[-1]
+        start_int = int(start_num)
+
+        for i, point in enumerate(points):
+            grid_coordinate = np.unravel_index([i], dims)
+            grid_coordinate = tuple(map(lambda coordinate: int(coordinate) + 1, grid_coordinate))
+            mask = PointMask.proximity_mask(self.point_cloud, point, self.radius)
+            if not mask.mask.any():
+                log.info("Could not find any points near {}".format(points))
+                continue
+            new_label = start_label.replace(start_num, str(start_int + i))
+            self.add_contact(mask, new_label, grid_coordinate, group)
+
+    def _interpolate_strip(self, group):
+        dims = self.dimensions
+        contacts = [contact for contact in self.contacts.values() if contact.lead_group == group]
+        locations = [tuple(contact.lead_location) for contact in contacts]
+        corners = [(1, 1), (dims[0], 1)]
+
+        if not all(x in locations for x in corners):
+            log.info("Not all corners present. Not interpolating")
+            return
+
+        corner_contacts = [
+            [contact for contact in contacts if \
+             contact.lead_location[0] == corner[0] and contact.lead_location[1] == corner[1]][0]
+            for corner in corners
+            ]
+
+        corner_coordinates = [contact.center for contact in corner_contacts]
+
+        start_label = corner_contacts[0].label
+        start_num = re.findall(r'\d+', start_label)[-1]
+        start_int = int(start_num)
+
+        points = interpolator.interpol(corner_coordinates[0], corner_coordinates[1], [], dims[0], 1)
+
+        for i, point in enumerate(points):
+            grid_coordinate = np.unravel_index([i], dims)
+            grid_coordinate = tuple(map(lambda coordinate: int(coordinate) + 1, grid_coordinate))
+            mask = PointMask.proximity_mask(self.point_cloud, point, self.radius)
+            if not mask.mask.any():
+                log.info("Could not find any points near {}".format(point))
+                continue
+            new_label = start_label.replace(start_num, str(start_int + i))
+            self.add_contact(mask, new_label, grid_coordinate, group)
+            log.info("Added contact {} at {}".format(new_label, point))
+
+
     def has_lead_location(self, lead_location, lead_group):
         for contact in self.contacts.values():
             if np.all(contact.lead_location == lead_location):
@@ -190,7 +270,7 @@ class Lead(object):
         return PointMask(self.label, self.point_cloud, full_mask)
 
 
-class CT(Scan):
+class CT(object):
     DEFAULT_THRESHOLD = 99.96
 
     def __init__(self, config):
@@ -201,6 +281,26 @@ class CT(Scan):
         self._leads = {}
         self._selection = PointMask("_selected", self._points)
         self.selected_lead_label = ""
+        self.filename = None
+        self.data = None
+        self.brainmask = None
+
+
+    def _load_scan(self, img_file):
+        self.filename = img_file
+        log.debug("Loading {}".format(img_file))
+        img = nib.load(self.filename)
+        self.data = np.fliplr(img.get_data()).squeeze()
+        self.brainmask = np.zeros(img.get_data().shape, bool)
+
+    def add_mask(self, filename):
+        mask = nib.load(filename).get_data()
+        mask = np.fliplr(mask)
+        self.brainmask = mask
+
+    def interpolate(self, lead_label):
+        lead = self._leads[lead_label]
+        lead.interpolate()
 
     def to_dict(self):
         leads = {}

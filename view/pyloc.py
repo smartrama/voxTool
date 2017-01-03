@@ -52,6 +52,11 @@ class PylocControl(object):
         self.lead_location = [0, 0]
         self.lead_group = 0
 
+    def interpolate_selected_lead(self):
+        self.selected_lead.interpolate()
+        self.view.update_cloud('_leads')
+        self.view.contact_panel.set_chosen_leads(self.ct.get_leads())
+
     def set_lead_location(self, lead_location, lead_group):
         self.lead_location = lead_location
         self.lead_group = lead_group
@@ -336,8 +341,8 @@ class ContactPanelWidget(QtGui.QWidget):
         self.contact_list = QtGui.QListWidget()
         layout.addWidget(self.contact_list)
 
-        self.autofill_button = QtGui.QPushButton("Auto-fill")
-        layout.addWidget(self.autofill_button)
+        self.interpolate_button = QtGui.QPushButton("Interpolate")
+        layout.addWidget(self.interpolate_button)
 
         self.assign_callbacks()
 
@@ -353,6 +358,8 @@ class ContactPanelWidget(QtGui.QWidget):
         self.x_lead_loc.textChanged.connect(self.lead_location_changed)
         self.y_lead_loc.textChanged.connect(self.lead_location_changed)
         self.lead_group.textChanged.connect(self.lead_location_changed)
+        self.interpolate_button.clicked.connect(self.controller.interpolate_selected_lead)
+
 
     def set_contact_label(self, label):
         self.contact_name.setText(label)
@@ -671,17 +678,18 @@ class CloudView(object):
 
 
 if __name__ == '__main__':
-    controller = PylocControl(yaml.load(open("../model/config.yml")))
+    controller = PylocControl(yaml.load(open(os.path.join(os.path.dirname(__file__) , "../config.yml"))))
     # controller = PyLocControl('/Users/iped/PycharmProjects/voxTool/R1170J_CT_combined.nii.gz')
-    controller.load_ct("../sandbox/R1001P_CT_combined.img")
+    controller.load_ct("../T01_R1248P_CT.nii.gz")
     controller.set_leads(
-        ["st", "de", "gr"], ["S", "D", "G"], [[8, 1], [8, 1], [4, 4]], [5, 10, 10], [10, 20, 20]
+        ["dA", "dB", "dC", "dD"], ["D", "D", "D", "D"], [[8, 1]] * 4, [5] * 4, [10] * 4
+        #["dA", "dB", "dC"], ["D", "D", "G"], [[8, 1], [8, 1], [4, 4]], [5, 10, 10], [10, 20, 20]
     )
     controller.exec_()
 
 if __name__ == 'x__main__':
     app = QtGui.QApplication.instance()
-    x = LeadDefinitionWidget(None, yaml.load(open("../model/config.yml")))
+    x = LeadDefinitionWidget(None, yaml.load(open(os.path.join(os.path.dirname(__file__) , "../model/config.yml"))))
     x.show()
     window = QtGui.QMainWindow()
     window.setCentralWidget(x)
