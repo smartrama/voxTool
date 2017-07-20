@@ -114,7 +114,7 @@ class PyLocControl(object):
         grid_dimensions = self.get_grid_dimensions()
         if not self.ct.contains_grid(grid_label):
             self.add_grid(Grid(grid_label, type=grid_type, dimensions=grid_dimensions))
-        electrode = self.ct.create_electrode_from_selection(electrode_label, 10)
+        electrode = self.ct.create_electrode_from_selection(electrode_label, 2)
         self.add_electrode(electrode, grid_label, grid_coordinates)
         self.view.submission_layout.contact_edit.setText(str(int(electrode_label) + 1))
         if grid_dimensions[1] == 1:

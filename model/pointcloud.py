@@ -193,7 +193,7 @@ class CT(object):
         self.selected_points.clear()
         self.selected_points.add_coordinates(points)
 
-    def select_points_near(self, point, nearby_range=10):
+    def select_points_near(self, point, nearby_range=2):
         """
         Computes the nearest connected components in the point cloud that is within nearby_range of point.
 
@@ -211,7 +211,7 @@ class CT(object):
         self.select_points(self.all_points.coordinates[self.connected_points == conn_comp_id[0]])
         # self.select_points(self.all_points.get_points_in_range(point, nearby_range))
 
-    def select_weighted_center(self, point, radius=10, iterations=1):
+    def select_weighted_center(self, point, radius=2, iterations=1):
         self.select_points_near(point, radius)
         for _ in range(iterations):
             centered_point = self.selected_points.get_center()

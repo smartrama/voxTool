@@ -52,10 +52,26 @@ class PylocControl(object):
         self.lead_location = [0, 0]
         self.lead_group = 0
 
+        self.seeding = False
+
     def interpolate_selected_lead(self):
         self.selected_lead.interpolate()
         self.view.update_cloud('_leads')
         self.view.contact_panel.set_chosen_leads(self.ct.get_leads())
+
+    def toggle_seeding(self):
+        self.seeding = not self.seeding
+        if self.seeding:
+            self.display_seed_contact()
+        else:
+            self.view.display_message("")
+
+    def display_seed_contact(self):
+        next_label = self.selected_lead.next_contact_label()
+        next_loc = self.selected_lead.next_contact_loc()
+
+        msg = "Click on contact {}{} ({}, {})".format(self.selected_lead.label, next_label, *next_loc)
+        self.view.display_message(msg)
 
     def set_lead_location(self, lead_location, lead_group):
         self.lead_location = lead_location
@@ -70,7 +86,7 @@ class PylocControl(object):
         try:
             self.selected_lead = self.ct.get_lead(lead_name)
         except KeyError:
-            log.warn("Lead {} does not exist".format(lead_name))
+            log.error("Lead {} does not exist".format(lead_name))
         self.select_next_contact_label()
 
     def prompt_for_ct(self):
@@ -111,27 +127,38 @@ class PylocControl(object):
     def define_leads(self):
         self.lead_window = QtGui.QMainWindow()
         lead_widget = LeadDefinitionWidget(self, self.config, self.view)
+        lead_widget.set_leads(self.ct.get_leads())
         self.lead_window.setCentralWidget(lead_widget)
         self.lead_window.show()
         self.lead_window.resize(200, lead_widget.height())
 
-    def select_coordinate(self, coordinate, do_center=True):
+    def select_coordinate(self, coordinate, do_center=True, allow_seed=True):
         log.debug("Selecting near coordinate {}".format(coordinate))
         self.clicked_coordinate = coordinate
         self.selected_coordinate = coordinate
-        radius = self.selected_lead.radius if not self.selected_lead is None else 10
+        radius = self.selected_lead.radius if not self.selected_lead is None else 5
         self.ct.select_points_near(coordinate, radius)
         if do_center:
             log.debug("Centering...")
             self.center_selection(self.config['selection_iterations'], radius)
 
-        self.view.update_cloud('_selected')
         if not np.isnan(self.selected_coordinate).all():
-            log.debug("Selected coordinate {}".format(self.selected_coordinate))
-            self.view.update_slices(self.selected_coordinate)
-            self.view.update_ras(self.selected_coordinate)
+            if self.seeding and allow_seed:
+                log.info("Seeding from coordinate {}".format(self.selected_coordinate))
+                self.selected_lead.seed_next_contact(self.selected_coordinate)
+                self.ct.clear_selection()
+                self.selected_coordinate = np.zeros((3,))
+                self.view.update_cloud('_leads')
+                self.select_next_contact_label()
+                self.view.contact_panel.set_chosen_leads(self.ct.get_leads())
+                self.display_seed_contact()
+            else:
+                self.view.update_ras(self.selected_coordinate)
+                log.info("Selected coordinate {}".format(self.selected_coordinate))
         else:
-            log.debug("No coordinate selected")
+            log.info("No coordinate selected")
+        self.view.update_cloud('_selected')
+        self.view.update_slices(self.selected_coordinate)
 
     def center_selection(self, iterations, radius):
         for _ in range(iterations):
@@ -176,69 +203,16 @@ class PylocControl(object):
 
     def select_next_contact_label(self):
         lead = self.selected_lead
-        lead_dimensions = lead.dimensions
-        contacts = lead.contacts.values()
 
-        if self.config['zero_index_lead']:
-            offset = 1
-        else:
-            offset = 0
+        self.contact_label = lead.next_contact_label()
+        self.lead_location = lead.next_contact_loc()
 
-        increase_location = True
-        if len(contacts) == 0:
-            max_y = 1 - offset
-            max_x = -offset
-            max_label = '0'
-        elif len(contacts) >= lead_dimensions[0] * lead_dimensions[1]:
-            max_x, max_y = self.lead_location[0], self.lead_location[1]
-            increase_location = False
-        else:
-            for c1, c2 in zip(contacts[:1:-1], contacts[-1::-1]):
-                if c2.lead_group != c1.lead_group:
-                    expected_x = 0
-                    expected_y = 0
-                else:
-                    if c1.lead_location[0] - offset == lead.dimensions[0]:
-                        expected_x = offset
-                        expected_y = c1.lead_location[1] + 1
-                    else:
-                        expected_x = c1.lead_location[0] + 1
-                        expected_y = c1.lead_location[1]
-                if c2.lead_location[0] != expected_x or c2.lead_location[1] != expected_y:
-                    max_y = c1.lead_location[1]
-                    max_x = c1.lead_location[0]
-                    max_label = contacts[-1].label
-                    break
-            else:
-                max_y = contacts[-1].lead_location[1]
-                max_x = contacts[-1].lead_location[0]
-                max_label = contacts[-1].label
-
-        if increase_location:
-            increase_label = True
-            if max_x + offset < lead_dimensions[0]:
-                log.debug("Incrementing dimension 0")
-                self.lead_location[0] = max_x + 1
-                self.lead_location[1] = max_y
-            elif max_y + offset == lead_dimensions[1]:
-                log.debug("Not incrementing")
-                increase_label = False
-            else:
-                log.debug("Incrementing dimension 1")
-                self.lead_location[0] = 1 - offset
-                self.lead_location[1] = max_y + 1
-
-            self.view.update_lead_location(*self.lead_location)
-
-            if increase_label and re.search(r"\d", max_label):
-                num = int(re.findall(r"\d+", max_label)[-1])
-                new_num = num + 1
-                self.contact_label = max_label.replace(str(num), str(new_num))
-                self.view.update_contact_label(self.contact_label)
+        self.view.update_lead_location(*self.lead_location)
+        self.view.update_contact_label(self.contact_label)
 
     def set_leads(self, labels, lead_types, dimensions, radii, spacings):
         self.ct.set_leads(labels, lead_types, dimensions, radii, spacings)
-        self.view.contact_panel.set_lead_labels(labels)
+        self.view.contact_panel.set_lead_labels(self.ct.get_leads().keys())
 
     def delete_contact(self, lead_label, contact_label):
         self.ct.get_lead(lead_label).remove_contact(contact_label)
@@ -266,6 +240,9 @@ class PylocWidget(QtGui.QWidget):
 
     def clear(self):
         pass
+
+    def display_message(self, msg):
+        self.cloud_widget.display_message(msg)
 
     def update_cloud(self, label):
         self.cloud_widget.update_cloud(label)
@@ -350,6 +327,10 @@ class ContactPanelWidget(QtGui.QWidget):
         self.interpolate_button = QtGui.QPushButton("Interpolate")
         layout.addWidget(self.interpolate_button)
 
+        self.seed_button = QtGui.QPushButton("Seeding")
+        self.seed_button.setCheckable(True)
+        layout.addWidget(self.seed_button)
+
         self.assign_callbacks()
 
     def display_coordinate(self, coordinate):
@@ -366,6 +347,7 @@ class ContactPanelWidget(QtGui.QWidget):
         self.lead_group.textChanged.connect(self.lead_location_changed)
         self.interpolate_button.clicked.connect(self.controller.interpolate_selected_lead)
         self.contact_list.currentItemChanged.connect(self.chosen_lead_selected)
+        self.seed_button.clicked.connect(self.controller.toggle_seeding)
 
     LEAD_LOC_REGEX = r'\((\d+\.?\d*),\s?(\d+\.?\d*),\s?(\d+\.?\d*)\)'
 
@@ -377,14 +359,14 @@ class ContactPanelWidget(QtGui.QWidget):
                 lead, contact = self.contacts[current_index.row()]
                 log.debug("Deleting contact {}{}".format(lead.label, contact.label))
                 self.controller.delete_contact(lead.label, contact.label)
-            except:
-                log.error("Could not delete contact")
+            except Exception as e:
+                log.error("Could not delete contact: {}".format(e))
 
     def chosen_lead_selected(self):
         current_index = self.contact_list.currentIndex()
         _, current_contact = self.contacts[current_index.row()]
         log.debug("Selecting contact {}".format(current_contact.label))
-        self.controller.select_coordinate(current_contact.center, False)
+        self.controller.select_coordinate(current_contact.center, False, False)
 
     def set_contact_label(self, label):
         self.contact_name.setText(label)
@@ -435,6 +417,7 @@ class ContactPanelWidget(QtGui.QWidget):
         self.contacts.append((lead, contact))
 
     def set_lead_labels(self, lead_labels):
+        self.label_dropdown.clear()
         for lead_name in lead_labels:
             self.label_dropdown.addItem(lead_name)
 
@@ -514,7 +497,12 @@ class LeadDefinitionWidget(QtGui.QWidget):
         self.controller.lead_window.close()
 
     def set_leads(self, leads):
-        self._leads = OrderedDict(sorted(leads.items()))
+        self._leads = {lead.label:
+                       {"label": lead.label,
+                        "x":lead.dimensions[0],
+                        "y":lead.dimensions[1],
+                        "type":lead.type_}
+                      for lead in leads.values()}
         self.refresh()
 
     def refresh(self):
@@ -592,6 +580,8 @@ class CloudWidget(QtGui.QWidget):
     def remove_cloud(self, label):
         self.viewer.remove_cloud(label)
 
+    def display_message(self, msg):
+        self.viewer.display_message(msg)
 
 class CloudViewer(HasTraits):
     BACKGROUND_COLOR = (.1, .1, .1)
@@ -604,6 +594,7 @@ class CloudViewer(HasTraits):
         self.figure = self.scene.mlab.gcf()
         mlab.figure(self.figure, bgcolor=self.BACKGROUND_COLOR)
         self.clouds = {}
+        self.text_displayed = None
 
     def update_cloud(self, label):
         self.clouds[label].update()
@@ -635,6 +626,12 @@ class CloudViewer(HasTraits):
                     return True
                 found = True
         return found
+
+    def display_message(self, msg):
+        if self.text_displayed is not None:
+            self.text_displayed.set(text=msg)
+        else:
+            self.text_displayed = mlab.text(0.01, 0.95, msg, figure=self.figure, width=1)
 
     view = View(Item('scene', editor=SceneEditor(scene_class=MayaviScene),
                      height=250, width=300, show_label=False),
@@ -707,14 +704,15 @@ class CloudView(object):
 
 if __name__ == '__main__':
     # controller = PylocControl(yaml.load(open(os.path.join(os.path.dirname(__file__) , "../config.yml"))))
-    # controller = PyLocControl('/Users/iped/PycharmProjects/voxTool/R1170J_CT_combined.nii.gz')
+    #controller = PylocControl()
     controller = PylocControl(yaml.load(open(os.path.join(os.path.dirname(__file__), "../config.yml"))))
 
     # controller.load_ct("../T01_R1248P_CT.nii.gz")
-    controller.load_ct('/Volumes/rhino_mount/data10/RAM/subjects/R1226D/tal/images/combined/R1226D_CT_combined.nii.gz')
+    # controller.load_ct('/Volumes/rhino_mount/data10/RAM/subjects/R1226D/tal/images/combined/R1226D_CT_combined.nii.gz')
+    controller.load_ct('/Users/iped/PycharmProjects/voxTool/R1226D_CT_combined.nii.gz')
     controller.set_leads(
         #    ["sA", "sB", "dA", "dB"], ["S", "S", "D", "D"], ([[6, 1]] * 2) + ([[8, 1]] * 2), ([5] * 2) + ([5] * 2), [10] * 4
-        ["GG"], ["G"], ([[4, 8]]), [5], [10]
+        ("G45", "G48"), ("G", "G"), ([4, 5], [4, 8]), [5, 5], [10, 10]
         # ["dA", "dB", "dC"], ["D", "D", "G"], [[8, 1], [8, 1], [4, 4]], [5, 10, 10], [10, 20, 20]
     )
     controller.exec_()
