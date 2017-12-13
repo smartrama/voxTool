@@ -425,7 +425,7 @@ class Lead(object):
 
 
 class CT(object):
-    DEFAULT_THRESHOLD = 99.93
+    DEFAULT_THRESHOLD = 99.96
 
     def __init__(self, config):
         super(CT, self).__init__()
@@ -446,7 +446,8 @@ class CT(object):
         img = nib.load(self.filename)
         img_shape =  np.array(img.get_data().shape)
         self.img_zoom = np.reciprocal(1.0*img_shape)*np.max(img_shape)
-        self.data = scipy.ndimage.zoom(np.fliplr(img.get_data()).squeeze(), self.img_zoom)
+        # self.data = scipy.ndimage.zoom(np.fliplr(img.get_data()).squeeze(), self.img_zoom)
+        self.data = scipy.ndimage.zoom(img.get_data().squeeze(), self.img_zoom)
         self.brainmask = np.zeros(img.get_data().shape, bool)
 
     def add_mask(self, filename):
@@ -496,6 +497,7 @@ class CT(object):
         self.set_leads(labels, types, dimensions, radii, spacings)
         for i, lead_label in enumerate(labels):
             for contact in leads[lead_label]['contacts']:
+                # coordinates = np.array(contact['coordinate_spaces']['ct_voxel']['raw'])
                 coordinates = contact['coordinate_spaces']['ct_voxel']['raw']
                 point_mask = PointMask.proximity_mask(self._points, coordinates, radii[i])
                 group = contact['lead_group']

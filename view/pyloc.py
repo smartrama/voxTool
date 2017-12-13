@@ -92,6 +92,7 @@ class PylocControl(object):
     def prompt_for_ct(self):
         file = QtGui.QFileDialog().getOpenFileName(None, 'Select Scan', '.', '(*.img; *.nii.gz)')
         if file:
+            print(file)
             self.load_ct(file)
             self.view.task_bar.define_leads_button.setEnabled(True)
 
@@ -709,7 +710,8 @@ if __name__ == '__main__':
 
     # controller.load_ct("../T01_R1248P_CT.nii.gz")
     # controller.load_ct('/Volumes/rhino_mount/data10/RAM/subjects/R1226D/tal/images/combined/R1226D_CT_combined.nii.gz')
-    controller.load_ct('/Users/iped/PycharmProjects/voxTool/R1226D_CT_combined.nii.gz')
+    # controller.load_ct('/Users/iped/PycharmProjects/voxTool/R1226D_CT_combined.nii.gz')
+    controller.load_ct('/Users/littlabadmin/Desktop/HUP149_postI_J70h.nii.gz')
     controller.set_leads(
         #    ["sA", "sB", "dA", "dB"], ["S", "S", "D", "D"], ([[6, 1]] * 2) + ([[8, 1]] * 2), ([5] * 2) + ([5] * 2), [10] * 4
         ("G45", "G48"), ("G", "G"), ([4, 5], [4, 8]), [5, 5], [10, 10]
